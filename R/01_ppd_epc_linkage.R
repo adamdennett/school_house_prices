@@ -502,6 +502,8 @@ resolve_ties <- function(candidates) {
 t_part <- Sys.time()
 
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path)
+# Local change (Nov 2026): duckdb 2.0 rejects the old "x -> ..." lambdas; re-enable them for this connection
+invisible(DBI::dbExecute(con, "SET lambda_syntax = 'ENABLE_SINGLE_ARROW'"))
 run_sql(sprintf("SET temp_directory = '%s'", here::here("data", "duckdb_tmp"))) # not the project folder
 
 # A field as readr reads it: trimmed of spaces and tabs, and missing when empty or NA
@@ -644,6 +646,8 @@ dbDisconnect(con, shutdown = TRUE)
 t_part <- Sys.time()
 
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path)
+# Local change (Nov 2026): duckdb 2.0 rejects the old "x -> ..." lambdas; re-enable them for this connection
+invisible(DBI::dbExecute(con, "SET lambda_syntax = 'ENABLE_SINGLE_ARROW'"))
 run_sql("SET preserve_insertion_order = false")
 create_macros(con)
 
@@ -4842,6 +4846,8 @@ t_part <- Sys.time()
 
 # Get data; the database is only read
 con <- dbConnect(duckdb::duckdb())
+# Local change (Nov 2026): duckdb 2.0 rejects the old "x -> ..." lambdas; re-enable them for this connection
+invisible(DBI::dbExecute(con, "SET lambda_syntax = 'ENABLE_SINGLE_ARROW'"))
 
 run_sql(sprintf("ATTACH '%s' AS db (READ_ONLY)", db_path))
 run_sql("USE db")
