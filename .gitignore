@@ -1,0 +1,9 @@
+data-raw/
+data/*.duckdb
+data/*.duckdb.wal
+data/duckdb_tmp/
+data/pp-psqm.csv
+beech-ppd-epc/
+.Rhistory
+.RData
+.Rproj.user
