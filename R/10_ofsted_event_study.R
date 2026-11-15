@@ -12,6 +12,7 @@
 # on current URNs via GIAS successor links (as R/05). The grade change is against the school's
 # previous graded inspection in that history (or the file's own "previous" grade).
 #
+# Average effect: the cohort-share weighted mean of the coefficients for half-years 0 to 5 after publication.
 # Model (fixest::feols, Sun and Abraham's interaction-weighted estimator via sunab()): log price
 # on hedonic controls (as R/06) | OA + district x year-month, with cohort = half-year of the event
 # and period = half-year of sale, never-treated OAs (no grade change of their nearest school in
@@ -73,13 +74,16 @@ run <- function(phase, kind) {
   D <- D[is.na(type) | type == kind]
   D[, cohort := fifelse(is.na(pub), 10000L, hy(pub))]
   m <- feols(as.formula(sprintf("lp ~ sunab(cohort, period, ref.p = -1) + %s | oa21cd + lad26cd^ym", ctrl)),
-             data = D, cluster = ~oa21cd, lean = TRUE)
-  ct <- as.data.table(coeftable(m), keep.rownames = "term")[grepl("^period::", term)]
+             data = D, cluster = ~oa21cd)
+  # sunab coefficients are cohort x period; aggregate() weights them by cohort shares (needs the model's data, so not lean)
+  ct <- as.data.table(aggregate(m, c("period" = "^period::(-?[[:digit:]]+):cohort")), keep.rownames = "term")
   setnames(ct, 2:3, c("b", "se"))
   ct[, rel := as.integer(sub("period::", "", term))]
-  att <- summary(m, agg = "att")$coeftable["ATT", 1:2]
+  # average effect over the three years after publication (half-years 0 to 5), cohort-share weighted
+  att <- aggregate(m, c("ATT" = "^period::[0-5]:cohort"))[1, 1:2]
+  n_obs <- nobs(m); rm(m); gc()
   list(es = ct[, .(phase, kind, rel, b, se)], att = data.table(phase, kind, b = att[1], se = att[2]),
-       n = nobs(m), oas_treated = uniqueN(D[cohort < 10000, oa21cd]), schools = uniqueN(D[cohort < 10000, urn]))
+       n = n_obs, oas_treated = uniqueN(D[cohort < 10000, oa21cd]), schools = uniqueN(D[cohort < 10000, urn]))
 }
 ctrl_vars <- c("lfa", "rooms", "propertytype", "built_form", "construction_age_band", "eff", "duration", "oldnew")
 out <- list()
@@ -99,7 +103,8 @@ g <- ggplot(es[abs(rel) < 8], aes(years, pct)) + geom_hline(yintercept = 0, colo
   facet_wrap(~panel) +
   labs(x = "Years from the published Ofsted report (half-years; the half-year before is the reference)", y = "Price change (%), 95% interval",
        title = "House prices before and after the nearest school's Ofsted grade changes",
-       subtitle = "Output Areas whose nearest state school (by walking time) was regraded, March 2019 to December 2024, against areas whose nearest school was not; like-for-like homes",
+       subtitle = "Output Areas whose nearest state school (by walking time) was regraded, March 2019 to December 2024,
+against areas whose nearest school was not; like-for-like homes",
        caption = "Sun and Abraham event study; OA and district x month fixed effects. Price Paid linked to EPCs (Chi; Beech); Ofsted official statistics and management information") +
   theme_minimal(base_size = 10) + theme(plot.title.position = "plot", panel.grid.minor = element_blank())
 ggsave(here::here("figures", "ofsted_event_study.png"), g, width = 10, height = 6.5, dpi = 150)
