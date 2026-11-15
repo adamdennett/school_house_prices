@@ -24,7 +24,7 @@ suppressPackageStartupMessages({ library(data.table); library(ggplot2); library(
 rd <- function(f) readRDS(here::here("data", f))
 pm <- rd("premium_models.rds"); pop <- rd("popularity_models.rds"); gap <- rd("gap_models.rds")
 ev <- rd("ofsted_event_study.rds"); het <- rd("heterogeneity.rds"); tg <- rd("three_groups.rds")
-ec <- rd("epc_controls.rds"); bm <- rd("barrier_models.rds")
+ec <- rd("epc_controls.rds"); bm <- rd("barrier_models.rds"); bh <- rd("bh_catchments.rds")
 f1 <- function(x) formatC(x, format = "f", digits = 1); f2 <- function(x) formatC(x, format = "f", digits = 2)
 sg <- function(x) ifelse(x > 0, paste0("+", f1(x)), f1(x)); sg2 <- function(x) ifelse(x > 0, paste0("+", f2(x)), f2(x))
 big <- function(x) format(x, big.mark = ",")
@@ -38,7 +38,7 @@ get_p <- function(ind, mod) E[indicator == ind & model == mod, premium]
 
 ::: {.callout-note}
 ## Status
-Working notes from the private `school_house_prices` repository (R/01 to R/14), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
+Working notes from the private `school_house_prices` repository (R/01 to R/15), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
 :::
 
 ## In short
@@ -56,6 +56,7 @@ Working notes from the private `school_house_prices` repository (R/01 to R/14), 
 - **The premium is larger where neighbouring schools differ more, and where the address buys priority.**
   - It is larger where the gap between the two nearest schools is large.
   - It is larger where the school admits by distance or catchment. There is none where the better school is a faith school.
+- **In Brighton and Hove, real catchment boundaries show no price jump at the line.** This is consistent with random allocation within catchments since 2008, and with Tan and Dennett. See [Brighton and Hove: real catchments](#brighton-and-hove-real-catchments)
 - **Prices barely respond when a school's Ofsted grade changes.** Upgrades add a few tenths of a per cent over two to three years. Downgrades show no clear fall.
 
 ## Data and how they were linked
@@ -68,6 +69,8 @@ Working notes from the private `school_house_prices` repository (R/01 to R/14), 
 | R/04 | National walking routes, `school_active_travel` (Zenodo 10.5281/zenodo.24188820) | Walking minutes from every Output Area to every state school | 870,225 pairs within 20 minutes |
 | R/05 | Ofsted official statistics as at 31 August 2018–2023, and management information as at 30 September 2026; GIAS successor links; Value Added v2.1 and four-year Attainment 8 (`school_value_added`) | Each sale's nearest primary and secondary, their Ofsted grade at the date of sale, minutes to the nearest Outstanding school, and the secondary's Attainment 8 and value added | `r big(6401832)` sales, September 2018 to September 2026 |
 | R/07 | DfE, *Primary and secondary school applications and offers*, school level, entry 2014–2026 | First preferences per place offered; FSM share; faith and selective status | Popularity for 86–87% of sales |
+| R/13 | ONS Output Areas (December 2021) boundaries EW BFE V9; OpenStreetMap (Geofabrik England, November 2026); Network Rail station list with ELR and mileage (`../rail/RailStations.csv`) | Lines where the nearest school changes; major roads, rivers and canals, railways | 7,510 lines |
+| R/15 | Brighton & Hove City Council secondary catchment maps, old and Option Z (OGL v3; copies in `../bh_school_system/data`) | Real catchment boundaries and the 2025 redraw | `r big(bh$n_sales)` Brighton and Hove sales |
 
 **Sample for the models:**
 
@@ -499,6 +502,153 @@ kable(dcast(copy(het$H)[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(
 $$\log p_i = \sum_k \beta_k\, A8_{s(i)} 1[g_i = k] + \sum_k \theta_k\, VA_{s(i)} 1[g_i = k] + X_i'\gamma + \mu_t + \lambda_l + \varepsilon_i$$
 ```r
 feols(lp ~ i(admissions, att8_z) + i(admissions, va_z) + <controls> | ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/11
+```
+:::
+
+## Brighton and Hove: real catchments
+
+Brighton and Hove publishes its secondary catchment map. Since 2008, places within a catchment have been allocated by random tie-break, not distance. So here the national walking-time proxy can be replaced with the real boundaries (R/15).
+
+**The maps**
+
+- **Old map:** in force for entry up to September 2025. Sales before 1 March 2025 are placed on it.
+- **New map ("Option Z"):** agreed in early 2025 for entry from September 2026. Later sales are placed on it.
+- **Source:** Brighton & Hove City Council, OGL v3. Copies are in `bh_school_system/data`.
+
+**Catchment quality:** the pupil-weighted mean of the catchment's schools' four-year Attainment 8, free school meals share and value added. The two faith schools have no catchment.
+
+```{r}
+#| label: tbl-bh-catch
+#| tbl-cap: "Brighton and Hove secondary catchments and their schools (four-year means, pupil-weighted)."
+kable(bh$CQ[, .(Catchment = catch, Schools = schools, `Attainment 8` = f1(att8), `FSM %` = f1(fsm), `Value added` = f2(va), Pupils = big(pupils))])
+```
+
+![Brighton and Hove secondary catchments: the old map (fill) and Option Z (dashed), with the sales whose catchment changed.](../figures/bh_catchments_map.png){#fig-bh-map}
+
+### Either side of the boundary
+
+This is the classic boundary design (Black 1999).
+
+- **The boundaries:** the `r f1(sum(bh$boundary_km$km))` km of boundary shared by adjacent catchments on the old map, cut into 500 m segments.
+- **The sample:** each sale between September 2018 and February 2025 is matched to its nearest boundary point by postcode.
+- **The comparison:** homes on the higher-results side against homes on the other side of the same segment, in the same month.
+
+```{r}
+#| label: fig-bh-bd
+#| fig-cap: "Premium on the higher-results side of a Brighton and Hove catchment boundary, by distance band (95% intervals). The last three rows are per 10 Attainment 8 points of gap."
+BA <- copy(bh$A)[, row := paste0(fifelse(term == "gap10", "Per 10 points of gap", fifelse(controls, "Better side, like for like", "Better side, no controls")), ", within ", dist, " m")]
+BA[, row := factor(row, rev(row))]
+ggplot(BA, aes(pct, row)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), colour = "#993bff", size = 0.3) + labs(x = "Price premium (%), 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-bh-bd
+#| tbl-cap: "Boundary design: premium (%) with 95% interval; segment and month fixed effects, clustered by segment."
+kable(BA[, .(Model = sub(", within.*", "", row), `Within` = paste(dist, "m"), Premium = sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi)), Sales = big(n), Segments = segs)])
+```
+
+![Residual price either side of the boundary in 100 m bands, after dwelling attributes, boundary segment and month effects (old map, September 2018 to February 2025).](../figures/bh_boundary.png){#fig-bh-bins}
+
+```{r}
+#| label: fig-bh-pairs
+#| fig-cap: "Better-side premium boundary by boundary (within 500 m, like for like), with the Attainment 8 gap between the two catchments."
+BP <- copy(bh$by_pair)[, lab := sprintf("%s (gap %s)", pair, f1(gap))][, lab := factor(lab, lab[order(gap)])]
+ggplot(BP, aes(pct, lab)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), colour = "#993bff", size = 0.3) + labs(x = "Premium (%) on the higher-results side, 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-bh-pairs
+#| tbl-cap: "Better-side premium by boundary (%), within 500 m, like for like."
+kable(BP[order(-gap), .(Boundary = pair, `Attainment 8 gap` = f1(gap), Premium = sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi)), Sales = big(n))])
+```
+
+```{r}
+#| label: setup-bh
+bA <- function(t, d, c) bh$A[term == t & dist == d & controls == c]
+```
+
+**What this shows**
+
+- **There is no clear jump at the boundary.**
+  - **Like for like, within 500 m,** the higher-results side sells for `r sg2(bA("better", 500, TRUE)$pct)`% (`r f2(bA("better", 500, TRUE)$lo)` to `r f2(bA("better", 500, TRUE)$hi)`). Without dwelling controls it is `r sg2(bA("better", 500, FALSE)$pct)`%.
+  - **Per 10 points of Attainment 8 gap,** it is `r sg2(bA("gap10", 500, TRUE)$pct)`% (`r f2(bA("gap10", 500, TRUE)$lo)` to `r f2(bA("gap10", 500, TRUE)$hi)`), only just distinguishable from zero.
+  - **In the residuals,** the 100 m bands are flat across the line.
+- **Boundary by boundary, the premiums do not follow school quality; they follow neighbourhoods.**
+  - The largest premium is on the BACA–Longhill boundary, where the two catchments' results differ by half a point.
+  - On the Blatchington/Hove Park–Portslade boundary, the Hove side carries a large premium for a 3-point gap. That boundary is also the old Hove–Portslade line.
+  - Across the Stringer/Varndean–Blatchington/Hove Park boundary, the higher-results Stringer/Varndean side sells for *less*.
+- **This is Tan and Dennett's result.** With random allocation within catchments, the catchment line is not where the price changes.
+
+### The catchment premiums
+
+```{r}
+#| label: fig-bh-cp
+#| fig-cap: "Price of each catchment against Stringer/Varndean: raw, like for like, and like for like within district (95% intervals)."
+CPb <- copy(bh$catch_prem)[, model := factor(model, c("raw", "hedonic", "district"), c("Raw", "Same kind of home", "Same kind of home, same district"))]
+CPb[, catch := factor(catch, rev(bh$CQ$catch))]
+ggplot(CPb, aes(pct, catch, colour = model)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.6, reverse = TRUE), size = 0.3) +
+  scale_colour_manual(values = c("Raw" = "#c9a2f5", "Same kind of home" = "#993bff", "Same kind of home, same district" = "#361a54"), name = NULL) +
+  labs(x = "Price against Stringer/Varndean (%), 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-bh-cp
+#| tbl-cap: "Price of each catchment against Stringer/Varndean (%), 95% interval."
+kable(dcast(CPb[, cell := sprintf("%s (%s to %s)", sg(pct), f1(lo), f1(hi))], catch ~ model, value.var = "cell")[order(-as.integer(catch))], col.names = c("Catchment", levels(CPb$model)))
+```
+
+**Reading the catchment premiums**
+
+- **Like for like,** homes in the BACA, Portslade and Longhill catchments cost 10–19% less than comparable homes in Stringer/Varndean. Blatchington/Hove Park homes cost 8% more.
+- **These are whole areas of the city.** The comparisons cannot separate the schools from everything else that differs between, say, Hove and Whitehawk.
+- **Only `r bh$straddle_lsoas` LSOAs straddle a catchment boundary,** too few for neighbourhood fixed effects. The boundary design above is the test that can.
+
+### The 2025 redraw
+
+- **Who moved:** Option Z moved `r big(bh$moves[move == "Moved to lower-results catchment", postcodes])` postcodes from a higher- to a lower-results catchment. Almost all went from Stringer/Varndean to Longhill, in the Elm Grove and Hanover area.
+- **The other way:** `r big(bh$moves[move == "Moved to higher-results catchment", postcodes])` postcodes moved from Longhill to Stringer/Varndean.
+- **The comparison:** sales in those postcodes before and after the change, against sales within 1 km that kept their catchment, with Output Area and month fixed effects.
+- **The dates:** the council published the redraw options on 2 October 2024 and decided in early 2025.
+
+```{r}
+#| label: fig-bh-dyn
+#| fig-cap: "Postcodes moved from Stringer/Varndean to a lower-results catchment, against neighbours within 1 km that kept theirs: price difference by half-year, relative to the second half of 2024 (95% intervals). Half-year 0 is January to June 2025."
+DY <- rbind(copy(bh$did_dyn)[, .(hy, pct, lo, hi)], data.table(hy = -1L, pct = 0, lo = 0, hi = 0))
+ggplot(DY, aes(hy / 2 + 2025, pct)) + geom_hline(yintercept = 0, colour = "#6b6680") +
+  geom_vline(xintercept = 2024.75, linetype = 2, colour = "#6b6680") + geom_vline(xintercept = 2025.17, linetype = 3, colour = "#6b6680") +
+  geom_pointrange(aes(ymin = lo, ymax = hi), colour = "#993bff", size = 0.3) +
+  annotate("text", x = 2024.7, y = max(DY$hi), label = "options published", hjust = 1, size = 3) +
+  labs(x = "Half-year (the first half-year bin also holds all earlier sales)", y = "Price difference (%)") + th
+```
+
+```{r}
+#| label: tbl-bh-did
+#| tbl-cap: "The redraw: price change (%) for postcodes that moved catchment, against those that kept theirs (95% interval)."
+DD <- rbind(copy(bh$did)[, cmp := "All kept postcodes; after 1 March 2025"], copy(bh$did_local)[, cmp := "Kept postcodes within 1 km; after 1 March 2025"],
+            copy(bh$did_announce)[, cmp := "Kept postcodes within 1 km; after 1 October 2024"])
+DD[, grp := fifelse(grepl("up", term), "Moved to higher-results catchment", "Moved to lower-results catchment")]
+kable(DD[, .(Comparison = cmp, Group = grp, `Price change` = sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi)))])
+```
+
+**This is suggestive at most.**
+
+- **The fall:** streets moved out of Stringer/Varndean fell `r sg2(bh$did_announce[grepl("down", term), pct])`% against their neighbours from October 2024, when the options were published. Relative to those neighbours, their prices were 6–12% higher from 2022 to mid-2024 than in the second half of 2024, and they stayed at the lower level after the decision.
+- **The streets moved the other way also fell** (`r sg2(bh$did_announce[grepl("up", term), pct])`%, not significant), when catchment capitalisation says they should have gained.
+- **The likelier explanation:** both groups lie along the same edge of east-central Brighton, so a local price trend there fits the data at least as well as the catchment change.
+- **Next:** a longer run of sales after the change will settle it.
+
+::: {.callout-tip collapse="true"}
+## The models
+Boundary design, for sale $i$ near segment $s$ in month $t$, with $B_i$ = 1 on the higher-results side:
+$$\log p_i = \beta B_i + X_i'\gamma + \sigma_s + \mu_t + \varepsilon_i, \quad \text{for } d_i \le 300, 500, 800 \text{ m}$$
+Redraw, for sale $i$ in Output Area $o$, with $U_i$, $D_i$ for postcodes moved to a higher- or lower-results catchment:
+$$\log p_i = \beta_U U_i \cdot \text{Post}_t + \beta_D D_i \cdot \text{Post}_t + X_i'\gamma + \alpha_o + \mu_t + \varepsilon_i$$
+```r
+feols(lp ~ better + <controls> | seg + ym, data = O[dist <= 500], cluster = ~seg)                          # R/15 A
+feols(lp ~ up:post_ann + down:post_ann + <controls> | oa21cd + ym, data = RL, cluster = ~oa21cd)          # R/15 C
 ```
 :::
 

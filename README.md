@@ -139,3 +139,13 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
     - Any barrier: 9.4% (5.8% with OSM rail).
   - **Better side without barrier lines:** +0.67% (+0.61% with OSM rail), against +0.64% for all. The gap and FSM patterns are unchanged. Barrier lines only: +0.37% (−0.7 to 1.5).
   - Lines are in `data-raw/boundaries/switch_lines.gpkg`.
+- **`R/15_bh_catchments.R`:** Brighton and Hove's real secondary catchments (council maps, OGL v3, from `../bh_school_system/data`). The old map applies to sales before March 2025, Option Z after. Catchment quality is the pupil-weighted four-year Attainment 8, FSM and VA of its schools.
+  - **A. Boundary design.** 30 km of shared boundary in 500 m segments, segment and month fixed effects, like for like.
+    - Within 500 m, the higher-results side gets +3.5% (−1.6 to 8.7); +2.2% per 10 points of Attainment 8 gap (0.1 to 4.3).
+    - The 100 m residual bands are flat across the line.
+    - Boundary by boundary, premiums follow neighbourhoods, not schools: BACA|Longhill +22% for a 0.5-point gap; the higher-results side of Stringer/Varndean|Blatchington is −7%.
+  - **B. Catchment premiums.** Like for like, against Stringer/Varndean: BACA −19%, Portslade −17%, Longhill −11%, Patcham −7%, Blatchington/Hove Park +8%. These are area comparisons; only 25 LSOAs straddle a boundary.
+  - **C. The 2025 redraw** (216 postcodes moved from Stringer/Varndean to Longhill; 45 the other way), against kept postcodes within 1 km, OA and month fixed effects:
+    - from the options' publication (October 2024): moved down −4.0% (−7.2 to −0.6); moved up −2.6% (not significant);
+    - the fall came in late 2024.
+    - Both groups fell, so it is more likely a local trend. Suggestive at most.
