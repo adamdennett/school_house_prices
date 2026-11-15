@@ -9,3 +9,4 @@ beech-ppd-epc/
 .Rproj.user
 data/*.parquet
 logs/
+Rplots.pdf

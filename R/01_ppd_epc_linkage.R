@@ -4998,6 +4998,29 @@ run_sql(sprintf(
   psqm_path
 ))
 
+# Local addition (Nov 2026): the same rows with their transaction and EPC ids, rooms, EPC dates and the
+# Land Registry new-build flag and tenure, for joining the certificates' other attributes later
+# (R/03). pp-psqm.csv above is unchanged.
+run_sql(sprintf(
+  "
+  COPY (
+    SELECT f.transactionid, f.id AS epc_id, f.dateoftransfer, f.postcode, f.district, f.county, f.price, f.tfarea,
+           f.numberrooms, f.priceper, f.propertytype, f.categorytype, f.inspectiondate, f.lodgementdate, f.n_epc,
+           t.oldnew, t.duration, t.paon, t.saon, t.street
+    FROM ppd_fields f JOIN transactions t USING (transactionid)
+    WHERE known(f.priceper) AND NOT (
+      (known(f.numberrooms) AND f.numberrooms > 20) OR
+      (known(f.tfarea) AND f.tfarea < 10) OR
+      (known(f.tfarea) AND f.tfarea > 1000) OR
+      (known(f.priceper) AND f.priceper > 60000) OR
+      (known(f.floorper) AND f.floorper < 5) OR
+      (known(f.floorper) AND f.floorper > 250)
+    )
+  ) TO '%s' (FORMAT parquet)
+  ",
+  here::here("data", "ppd_epc_matched.parquet")
+))
+
 message("part 3, final PPD: ", format(round(Sys.time() - t_part, 1)))
 
 dbDisconnect(con, shutdown = TRUE)
