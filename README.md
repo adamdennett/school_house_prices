@@ -53,3 +53,16 @@ ONS Postcode Directory, August 2026 (ONSPD_AUG_2026.zip, from <https://www.arcgi
   - minutes to the nearest Outstanding, and Good or better, primary and secondary;
   - the nearest secondary's Value Added v2.1 and four-year Attainment 8 (from `../school_value_added`).
 - **`R/06_premium_models.R`:** the premium near "good" schools, raw, then for the same kind of home (dwelling attributes with district effects), then within the same LSOA. Also Attainment 8 and value added together.
+- **`R/07_popularity.R`:** each sale's nearest primary and secondary, with the school's first preferences per place in the admissions round buyers could see building (DfE applications and offers, school level, entry 2014 to 2026). Output: `data/sales_panel_pop.parquet`. The figure is found for 86.9% of sales for the primary and 86.0% for the secondary.
+
+### First results (R/06; 5,180,630 sales with complete attributes)
+
+| Near a "good" school | Raw | Same kind of home | Same home, same LSOA |
+|---|---|---|---|
+| Outstanding secondary within 10 min walk | +37.0% | +2.7% | +0.6% |
+| Outstanding primary within 10 min walk | +20.4% | +2.1% | −0.5% |
+| Nearest secondary is Outstanding | +31.5% | +5.2% | +1.0% |
+| Nearest secondary in top 10% for Attainment 8 | +21.9% | +4.1% | +0.9% |
+| Nearest secondary in top 10% for value added | −10.8% | −4.4% | 0.0% |
+
+Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 like for like, +0.007 within LSOA; value added −0.073, −0.020, −0.002.
