@@ -24,6 +24,7 @@ suppressPackageStartupMessages({ library(data.table); library(ggplot2); library(
 rd <- function(f) readRDS(here::here("data", f))
 pm <- rd("premium_models.rds"); pop <- rd("popularity_models.rds"); gap <- rd("gap_models.rds")
 ev <- rd("ofsted_event_study.rds"); het <- rd("heterogeneity.rds"); tg <- rd("three_groups.rds")
+ec <- rd("epc_controls.rds"); bm <- rd("barrier_models.rds")
 f1 <- function(x) formatC(x, format = "f", digits = 1); f2 <- function(x) formatC(x, format = "f", digits = 2)
 sg <- function(x) ifelse(x > 0, paste0("+", f1(x)), f1(x)); sg2 <- function(x) ifelse(x > 0, paste0("+", f2(x)), f2(x))
 big <- function(x) format(x, big.mark = ",")
@@ -37,7 +38,7 @@ get_p <- function(ind, mod) E[indicator == ind & model == mod, premium]
 
 ::: {.callout-note}
 ## Status
-Working notes from the private `school_house_prices` repository (R/01 to R/12), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
+Working notes from the private `school_house_prices` repository (R/01 to R/14), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
 :::
 
 ## In short
@@ -47,6 +48,7 @@ Working notes from the private `school_house_prices` repository (R/01 to R/12), 
   - Comparing the same kind of home in the same district, the premiums fall to `r sg(get_p("outst_sec10", "hedonic"))`% and `r sg(get_p("top_att8", "hedonic"))`%.
   - Comparing homes within the same LSOA (a neighbourhood of about 700 homes), they fall to `r sg(get_p("outst_sec10", "neighbourhood"))`% and `r sg(get_p("top_att8", "neighbourhood"))`%.
   - This is Tan and Dennett's Brighton result, nationally.
+  - **It holds with every characteristic of the home we can get from its EPC, and for the same property sold twice.** It is the neighbourhood, more than the home, that accounts for the raw gap. See [Does it hold with every property characteristic?](#does-it-hold-with-every-property-characteristic)
 - **Buyers pay for results and intake, not for value added.**
   - Within neighbourhoods, a school-level standard deviation of Attainment 8 is worth about 1% of the price.
   - Value added is worth nothing, or slightly less than nothing.
@@ -109,6 +111,120 @@ $X_i$: log floor area, habitable rooms, property type, built form, construction 
 ```r
 feols(lp ~ outst_sec10 + lfa + i(rooms) + i(propertytype) + i(built_form) + i(construction_age_band) +
         eff + i(duration) + i(oldnew) | ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/06
+```
+:::
+
+## Does it hold with every property characteristic?
+
+Every like-for-like model in this report already controls for the home's characteristics from its EPC. The "raw" column is the only one without them. R/14 checks this two ways.
+
+### Adding the EPC detail step by step
+
+```{r}
+#| label: setup-ladder
+L <- copy(ec$ladder)[, `:=`(rung_lab = factor(ec$lab_rung[rung], ec$lab_rung), fe_lab = fifelse(fe == "ym", "Month effects only", "Month and LSOA effects"),
+                            term_lab = factor(term, c("att8_z", "va_z", "near_sec_out"), c("Attainment 8 (per SD)", "Value added (per SD)", "Nearest secondary Outstanding")))]
+lp_ <- function(t, r, f) L[term == t & rung == r & fe == f, pct]
+```
+
+The nearest state secondary's Attainment 8 is estimated on five sets of property controls (C0 to C4), first with month effects only, then also with LSOA effects. Value added is entered alongside it, and "nearest secondary is Outstanding" is estimated separately.
+
+- **C0:** no property controls.
+- **C1:** what Price Paid alone gives: property type, freehold or leasehold, new build.
+- **C2:** adds the EPC's floor area and rooms.
+- **C3:** adds the EPC's construction age band, built form and energy efficiency. This is the main specification.
+- **C4:** adds every other usable EPC field:
+  - floor area decile by property type;
+  - energy rating band;
+  - main fuel and mains gas;
+  - floor level for flats;
+  - extensions;
+  - heated rooms;
+  - EPC property type;
+  - years from the EPC inspection to the sale.
+
+```{r}
+#| label: fig-ladder
+#| fig-width: 11
+#| column: page-right
+#| fig-cap: "Premium with more and more of the home's EPC characteristics as controls, with and without LSOA fixed effects (95% intervals)."
+ggplot(L, aes(pct, rung_lab, colour = fe_lab)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.5, reverse = TRUE), size = 0.3) +
+  facet_wrap(~term_lab, scales = "free_x") + scale_y_discrete(limits = rev) +
+  scale_colour_manual(values = c("Month effects only" = "#c9a2f5", "Month and LSOA effects" = "#361a54"), name = NULL) +
+  labs(x = "Price premium (%), 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-ladder
+#| tbl-cap: "Premium (%) with 95% interval, and the within R² of the model, by set of property controls."
+T <- dcast(L[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))], rung_lab + fe_lab ~ term_lab, value.var = "cell")
+R2 <- L[term %in% c("att8_z", "near_sec_out"), .(r2 = f2(r2[1])), by = .(rung_lab, fe_lab, term)][, dcast(.SD, rung_lab + fe_lab ~ term, value.var = "r2")]
+T <- merge(T, R2, by = c("rung_lab", "fe_lab"))[order(fe_lab != "Month effects only", rung_lab)]
+kable(T, col.names = c("Property controls", "Area effects", "Attainment 8 (per SD)", "Value added (per SD)", "Nearest secondary Outstanding", "R² (Attainment 8 model)", "R² (Outstanding model)"))
+```
+
+**What the ladder shows**
+
+- **The home's characteristics explain little of the raw premium; the neighbourhood explains most of it.**
+  - **With month effects only,** adding the home's characteristics takes the Attainment 8 premium from `r sg(lp_("att8_z", "C0", "ym"))`% to `r sg(lp_("att8_z", "C3", "ym"))`% per SD, and `r sg(lp_("att8_z", "C4", "ym"))`% with every EPC field. The "nearest secondary Outstanding" premium goes from `r sg(lp_("near_sec_out", "C0", "ym"))`% to `r sg(lp_("near_sec_out", "C4", "ym"))`%. The EPC fields add a great deal of explanatory power (within R² from `r f2(L[term == "att8_z" & rung == "C0" & fe == "ym", r2])` to `r f2(L[term == "att8_z" & rung == "C4" & fe == "ym", r2])`) but leave the school premium mostly in place.
+  - **Comparing homes in the same LSOA** is what removes it: `r sg2(lp_("att8_z", "C0", "ym + lsoa21cd"))`% per SD even with no property controls.
+- **Once homes are compared within the same LSOA, the EPC detail barely moves the estimate:**
+  - Attainment 8: `r sg2(lp_("att8_z", "C0", "ym + lsoa21cd"))`% with no property controls, `r sg2(lp_("att8_z", "C3", "ym + lsoa21cd"))`% with the main controls, `r sg2(lp_("att8_z", "C4", "ym + lsoa21cd"))`% with every EPC field;
+  - nearest secondary Outstanding: `r sg2(lp_("near_sec_out", "C0", "ym + lsoa21cd"))`%, `r sg2(lp_("near_sec_out", "C3", "ym + lsoa21cd"))`% and `r sg2(lp_("near_sec_out", "C4", "ym + lsoa21cd"))`%.
+- **Value added stays at or below zero** on every set of controls.
+
+### The same property, sold more than once
+
+```{r}
+#| label: setup-repeat
+Rp <- copy(ec$repeat_sales)
+```
+
+- **The sample:** `r big(ec$props_repeat)` properties (by EPC UPRN) were sold more than once between September 2018 and September 2026, giving `r big(ec$n_repeat)` sales.
+- **What is held constant:** property fixed effects absorb everything fixed about the home and its plot, measured or not. District × month effects absorb local price trends.
+- **What can be estimated:** only school measures that change between a property's sales. These are Ofsted grades at the date of sale and each year's popularity.
+- **The comparison:** each measure is also estimated on the same sales with LSOA effects instead of property effects.
+
+```{r}
+#| label: fig-repeat
+#| fig-cap: "Premium for school measures that change over time: the same property (repeat sales) against the same LSOA, on the same sales (95% intervals)."
+Rp[, label := factor(label, rev(unique(label)))]
+ggplot(Rp, aes(pct, label, colour = design)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.5, reverse = TRUE), size = 0.3) +
+  scale_colour_manual(values = c("Same property (repeat sales)" = "#993bff", "Same LSOA (same sales)" = "#c9a2f5"), name = NULL) +
+  labs(x = "Price premium (%), 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-repeat
+#| tbl-cap: "Premium (%) with 95% interval. Changers = repeat-sold properties whose value of the measure differs between their sales (what identifies the repeat-sales estimate)."
+kable(dcast(Rp[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))], label + changers ~ design, value.var = "cell")[order(-as.integer(label))][, changers := big(changers)],
+      col.names = c("School measure", "Changers", "Same LSOA (same sales)", "Same property (repeat sales)"))
+```
+
+```{r}
+#| label: setup-repeat2
+rp <- function(l, d) Rp[label == l & design == d]
+```
+
+**The same property tells the same story, a little smaller.**
+
+- **Nearest secondary becomes Outstanding:** when a property's nearest secondary is Outstanding at one sale and not at the other, the price differs by `r sg2(rp("Nearest secondary Outstanding", "Same property (repeat sales)")$pct)`%. The same-LSOA estimate on the same sales is `r sg2(rp("Nearest secondary Outstanding", "Same LSOA (same sales)")$pct)`%.
+- **Nearest primary:** `r sg2(rp("Nearest primary Outstanding", "Same property (repeat sales)")$pct)`% (same LSOA: `r sg2(rp("Nearest primary Outstanding", "Same LSOA (same sales)")$pct)`%).
+- **Popularity:** a standard deviation more first preferences per place adds `r sg2(rp("Secondary popularity (per SD)", "Same property (repeat sales)")$pct)`% for the secondary and `r sg2(rp("Primary popularity (per SD)", "Same property (repeat sales)")$pct)`% for the primary.
+- **The scale:** every school measure is worth under 1% of the price when the home itself is held fixed.
+
+::: {.callout-tip collapse="true"}
+## The models
+Control ladder, for rung $k$ with property controls $X_i^{(k)}$:
+$$\log p_i = \beta_1 A8_{s(i)} + \beta_2 VA_{s(i)} + X_i^{(k)\prime}\gamma + \mu_t \;[+\, \lambda_l] + \varepsilon_i$$
+Repeat sales, for property $h$ in district $d$:
+$$\log p_{ht} = \beta S_{ht} + Z_{ht}'\gamma + \alpha_h + \mu_{d,t} + \varepsilon_{ht}$$
+with $Z_{ht}$ the EPC measures that can change between sales (log floor area, rooms, energy efficiency).
+```r
+feols(lp ~ att8_z + va_z + <rung k controls> | ym + lsoa21cd, data = A, cluster = ~msoa21cd)            # R/14 A
+feols(lp ~ near_sec_out + lfa + i(rooms) + eff | uprn + lad26cd^ym, data = R, cluster = ~uprn)           # R/14 B
 ```
 :::
 
@@ -242,6 +358,72 @@ feols(lp ~ i(gap_q, better) + <controls> | ym + lsoa21cd, data = G, cluster = ~m
 ```
 :::
 
+### Without lines that follow major roads, rivers and railways
+
+Greaves and Venturin drop boundaries that run along major roads, rivers and railways, where the two sides may differ for reasons other than the school. R/13 does the same for the walking-time lines.
+
+**How each line is built**
+
+- **The line:** the shared boundary between the two sides of each split LSOA. Each side is the union of the LSOA's 2021 Output Areas with the same nearest secondary.
+- **Barriers it is checked against:**
+  - **Major roads:** OpenStreetMap motorways, trunk and primary roads, within 25 m.
+  - **Rivers and canals:** OpenStreetMap, within 25 m.
+  - **Railways:** built from the Network Rail station list (`../rail/RailStations.csv`). Stations are ordered by mileage along each line of route (ELR) and joined in sequence, with chords over 10 km dropped. These are straight chords between stations, so the tolerance is 150 m. OpenStreetMap track within 25 m is a cross-check.
+- **The rule:** a line "follows a barrier" if half or more of its length lies within the tolerance.
+
+```{r}
+#| label: setup-barriers
+B <- copy(bm$B); Rb <- copy(bm$R)
+sh <- function(x) paste0(f1(100 * mean(x >= 0.5)), "%")
+rb <- function(s, sp, gr) Rb[set == s & spec == sp & group == gr]
+```
+
+**How many lines follow a barrier.** Of `r big(nrow(B))` lines (median length `r big(round(median(B$line_m)))` m):
+
+- `r sh(B$road)` follow a major road;
+- `r sh(B$river)` follow a river or canal;
+- `r sh(B$rail_nr)` follow a railway built from the Network Rail stations, and `r sh(B$rail_osm)` a railway in OpenStreetMap;
+- `r paste0(f1(100 * mean(B$bar_nr)), "%")` follow at least one barrier (`r paste0(f1(100 * mean(B$bar_osm)), "%")` with OpenStreetMap rail).
+
+The two rail sources agree on `r paste0(f1(100 * mean((B$rail_nr >= 0.5) == (B$rail_osm >= 0.5))), "%")` of lines.
+
+```{r}
+#| label: fig-barriers
+#| fig-height: 6.5
+#| column: page-right
+#| fig-cap: "Premium on the better side, same LSOA, like-for-like homes: all split LSOAs, without barrier lines, and on barrier lines only (95% intervals)."
+P <- copy(Rb)[, set := factor(set, rev(unique(Rb$set)))][, spec := factor(spec, unique(Rb$spec))]
+ggplot(P, aes(pct, group, colour = set)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge(width = 0.7), size = 0.3) +
+  facet_grid(spec ~ ., scales = "free_y", space = "free_y", switch = "y") +
+  scale_colour_manual(values = c("All split LSOAs" = "#c9a2f5", "Without barrier lines (Network Rail stations)" = "#993bff",
+                                 "Without barrier lines (OSM rail)" = "#5b2a99", "Barrier lines only" = "#e8a33d"), name = NULL,
+                      guide = guide_legend(reverse = TRUE, nrow = 2)) +
+  labs(x = "Premium (%) on the better side, 95% interval", y = NULL) + th +
+  theme(strip.placement = "outside", strip.text.y.left = element_text(angle = 0, face = "bold", hjust = 1))
+```
+
+```{r}
+#| label: tbl-barriers
+#| tbl-cap: "Premium (%) on the better side with 95% interval, by sample."
+kable(dcast(copy(Rb)[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))], spec + group ~ set, value.var = "cell")[order(match(spec, unique(Rb$spec)))],
+      col.names = c("Model", "Group", sort(unique(Rb$set))))
+```
+
+```{r}
+#| label: tbl-barrier-n
+#| tbl-cap: "Sample sizes."
+kable(unique(Rb[spec == "Overall", .(Sample = set, LSOAs = big(lsoas), Sales = big(n))]))
+```
+
+**Dropping barrier lines changes nothing.**
+
+- **Without lines that follow a major road, river or railway,** the better side's premium is `r sg2(rb("Without barrier lines (Network Rail stations)", "Overall", "Better side")$pct)`% (`r sg2(rb("Without barrier lines (OSM rail)", "Overall", "Better side")$pct)`% with OpenStreetMap rail), against `r sg2(rb("All split LSOAs", "Overall", "Better side")$pct)`% for all lines.
+- **The rise with the size of the Attainment 8 gap** and the free school meals pattern are the same.
+- **On barrier lines alone** the estimate is `r sg2(rb("Barrier lines only", "Overall", "Better side")$pct)`%. That is too few LSOAs for the interval to say anything.
+- **The rail sources differ.** The Network Rail station chords flag more lines than OpenStreetMap track (`r sh(B$rail_nr)` against `r sh(B$rail_osm)`), as expected from straight chords with a wider tolerance. The results are the same either way.
+- **Lines not built:** for `r big(nrow(pr_ <- gap$pairs) - nrow(B))` split LSOAs no shared edge between the two sides could be built, because their OAs do not touch. They are kept and treated as not following a barrier.
+
 ## When the Ofsted grade changes
 
 This is an event study around the publication of a graded inspection that changed the nearest school's grade, March 2019 to December 2024. It uses Sun and Abraham's estimator with OA and district × month fixed effects, and compares against OAs whose nearest school was not regraded (R/10).
@@ -334,9 +516,10 @@ feols(lp ~ i(admissions, att8_z) + i(admissions, va_z) + <controls> | ym + lsoa2
 - **LSOA fixed effects may over-control.** Neighbourhood quality is partly caused by the school, through who moves in. The within-LSOA estimates are a lower bound on what a family pays for "the area with the good school".
 - **School measures:** Attainment 8 and value added are four-year averages for 2021/22 to 2024/25, not the figures buyers saw at the time of each sale (2018–2026). Ofsted grades are at the date of sale.
 - **The sample:** sales matched to an EPC (83%). Category A sales only.
-- **Not yet done:**
-  - lines that coincide with major roads, rivers or railways have not been removed (Greaves and Venturin do);
-  - only the within-3-minutes check is in place.
+- **Lines along barriers:** these have been checked (R/13) and make no difference.
+  - **The railway check:** it uses straight chords between Network Rail stations, cross-checked against OpenStreetMap track.
+  - **Lines built from Output Areas:** the lines follow the edges of 2021 Output Areas, which often run along streets themselves. A real catchment map would be sharper.
+- **Repeat sales** identify only school measures that change over time: Ofsted grades and popularity. Attainment 8 and value added are fixed per school here, so they are identified only across neighbourhoods and within LSOAs.
 
 ## References
 

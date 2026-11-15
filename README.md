@@ -130,3 +130,12 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
   - **Nearest secondary Outstanding:** +0.55% (0.32 to 0.78), against +0.80% within LSOA on the same sales.
   - **Nearest primary Outstanding:** +0.20%.
   - **Popularity:** secondary +0.17% per SD, primary +0.08% per SD.
+- **`R/13_barriers.R`:** drops the R/09 lines that follow major roads, rivers or railways.
+  - **The lines:** 7,510 shared edges between the two sides of split LSOAs (2021 OA boundaries from ONS), median 749 m.
+  - **Barriers, using OpenStreetMap from the Geofabrik England extract:**
+    - major roads (motorway, trunk, primary) within 25 m: 3.4% of lines;
+    - rivers and canals within 25 m: 0.9%;
+    - railways from `../rail/RailStations.csv` (Network Rail stations joined along each ELR by mileage, chords up to 10 km, 150 m tolerance): 5.4%; OSM rail within 25 m: 1.5%. The two agree on 94% of lines.
+    - Any barrier: 9.4% (5.8% with OSM rail).
+  - **Better side without barrier lines:** +0.67% (+0.61% with OSM rail), against +0.64% for all. The gap and FSM patterns are unchanged. Barrier lines only: +0.37% (−0.7 to 1.5).
+  - Lines are in `data-raw/boundaries/switch_lines.gpkg`.
