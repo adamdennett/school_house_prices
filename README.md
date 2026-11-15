@@ -1,5 +1,8 @@
 # Do schools push up house prices? A national test
 
+
+**Site:** <https://adamdennett.github.io/school_house_prices/> (the findings report). To rebuild it: `quarto render report/findings.qmd`, then copy `report/findings.html` to `docs/index.html`.
+
 A national follow-up to Tan and Dennett's Brighton study ("Do good schools influence property prices? Disentangling school and neighbourhood effects", CUPUM). That study found that, once a home and its neighbourhood are accounted for, a good school nearby adds only a few per cent to its price.
 
 The plan is in `school_value_added/writeup/house_prices_schools_backlog.md`:

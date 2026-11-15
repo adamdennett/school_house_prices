@@ -1,7 +1,7 @@
 ---
 title: "House prices near 'good' schools in England"
 subtitle: "First national results: raw premiums, like-for-like premiums, and what buyers pay for"
-author: "Adam Dennett (working notes, with Claude)"
+author: "Adam Dennett, Bartlett Centre for Advanced Spatial Analysis, UCL"
 date: last-modified
 format:
   html:
@@ -40,8 +40,13 @@ get_p <- function(ind, mod) E[indicator == ind & model == mod, premium]
 ```
 
 ::: {.callout-note}
-## Status
-Working notes from the private `school_house_prices` repository (R/01 to R/18), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
+## About this page
+- **What it is:** working results from the [`school_house_prices`](https://github.com/adamdennett/school_house_prices) repository (scripts R/01 to R/18). All numbers are read from the saved model outputs when the page is rendered.
+- **Data:** published only: HM Land Registry Price Paid, the EPC register, DfE, Ofsted and ONS. No pupil-level records are used.
+- **Related:**
+  - the [School Value Added](https://adamdennett.github.io/school_value_added/) site, where the Attainment 8 and Value Added v2.1 measures used here come from;
+  - its [pupil numbers and school places](https://adamdennett.github.io/school_value_added/demographics.html) page, on births, fertility and housing costs;
+  - [Why Brighton and Hove has so few young children](https://adamdennett.github.io/school_value_added/bh_births_note.html), a note for the council.
 :::
 
 ## In short
@@ -995,4 +1000,4 @@ Greaves and Venturin (IZA DP 18750) is the closest study. It also covers English
 - Greaves, E. and Venturin, A. (2026) Re-examining the property price premium around 'better' schools. IZA Discussion Paper 18750.
 - Hussain, I. (2023) The capitalization of school quality into property values: evidence from English schools. *Journal of Urban Economics*, 133, 103519.
 - Sun, L. and Abraham, S. (2021) Estimating dynamic treatment effects in event studies with heterogeneous treatment effects. *Journal of Econometrics*, 225(2), 175–199.
-- Tan, J. and Dennett, A. CUPUM book chapter on schools and house prices in Brighton and Hove [full title and year to check].
+- Tan, J. and Dennett, A. Do good schools influence property prices? Disentangling school and neighbourhood effects. CUPUM book chapter.
