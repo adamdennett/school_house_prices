@@ -161,4 +161,12 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
   - **News term:** +0.04%.
   - **Repeat sales:** +0.05% (not significant).
   - **Buyers price standing, not the latest results.**
+- **`R/18_importance.R`:** what matters most in the price of a home. A Shapley (LMG) decomposition of R² over blocks of variables, the same method as the Attainment 8 variance decomposition in `school_attainment_tool`. It uses the full subset lattice: 2,048 models for design A and 1,024 for design B, fitted in parallel, taking 33 minutes.
+  - **Design A** (district and IMD as location; 250,000 sales, R² 0.857):
+    - district 42.6%, size 24.9%, deprivation 10.2%, type 9.7%;
+    - school results 3.2%, month 2.4%, tenure 2.2%, intake 2.0%, Ofsted 1.9%, age 0.9%, energy 0.1%.
+    - A second sample matches to within 0.2 points.
+  - **Design B** (LSOA as location; 1,000,000 sales, R² 0.899): LSOA 57.4%, size 21.8%.
+  - **School blocks together:** about 7% of the Shapley share, but added last they add 0.07 points of R² (A) and 0.005 (B).
+  - **By pupil group:** disadvantaged pupils' results carry 1.5%, all pupils' 3.2%, non-disadvantaged pupils' 3.6%.
 - **Report:** `report/findings.qmd` now has "In pounds", "Results at the date of sale" and "How this compares with Greaves and Venturin (2026)".

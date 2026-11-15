@@ -25,7 +25,7 @@ rd <- function(f) readRDS(here::here("data", f))
 pm <- rd("premium_models.rds"); pop <- rd("popularity_models.rds"); gap <- rd("gap_models.rds")
 ev <- rd("ofsted_event_study.rds"); het <- rd("heterogeneity.rds"); tg <- rd("three_groups.rds")
 ec <- rd("epc_controls.rds"); bm <- rd("barrier_models.rds"); bh <- rd("bh_catchments.rds")
-ks <- rd("ks4_at_sale.rds"); pp <- rd("premium_pounds.rds")
+ks <- rd("ks4_at_sale.rds"); pp <- rd("premium_pounds.rds"); imp <- rd("importance.rds")
 gbp <- function(x) paste0(ifelse(x < 0, "−£", "£"), formatC(round(abs(x), -2), format = "d", big.mark = ","))
 p25 <- function(t, d) pp$P[indicator == "near_sec_out" & yr == 2025 & type == t & design == c("raw", "district", "lsoa")[d]]
 f1 <- function(x) formatC(x, format = "f", digits = 1); f2 <- function(x) formatC(x, format = "f", digits = 2)
@@ -41,12 +41,13 @@ get_p <- function(ind, mod) E[indicator == ind & model == mod, premium]
 
 ::: {.callout-note}
 ## Status
-Working notes from the private `school_house_prices` repository (R/01 to R/15), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
+Working notes from the private `school_house_prices` repository (R/01 to R/18), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
 :::
 
 ## In short
 
 - **The raw premium is real, and about the size the councillor quoted.** Homes with an Outstanding state secondary within 10 minutes' walk sold for `r f1(get_p("outst_sec10", "raw"))`% more than other homes sold in the same month. Where the nearest secondary is in England's top 10% for Attainment 8, the figure is `r sg(get_p("top_att8", "raw"))`%.
+- **Location and size are most of the price; schools are a small part, and almost all of it is location.** Split the way we split Attainment 8, the district and neighbourhood deprivation account for `r f1(100 * sum(imp$SH[job == "A_all" & block %in% c("district", "deprivation"), share]))`% of what the model explains, and size `r f1(100 * imp$SH[job == "A_all" & block == "size", share])`%. The nearest schools account for `r f1(100 * sum(imp$SH[job == "A_all" & block %in% c("ofsted", "results", "intake"), share]))`%. Added last, they add less than a tenth of a percentage point. See [What matters most](#what-matters-most-in-the-price-of-a-home).
 - **Most of it is the kind of home and the kind of area.**
   - Comparing the same kind of home in the same district, the premiums fall to `r sg(get_p("outst_sec10", "hedonic"))`% and `r sg(get_p("top_att8", "hedonic"))`%.
   - Comparing homes within the same LSOA (a neighbourhood of about 700 homes), they fall to `r sg(get_p("outst_sec10", "neighbourhood"))`% and `r sg(get_p("top_att8", "neighbourhood"))`%.
@@ -129,6 +130,156 @@ $X_i$: log floor area, habitable rooms, property type, built form, construction 
 feols(lp ~ outst_sec10 + lfa + i(rooms) + i(propertytype) + i(built_form) + i(construction_age_band) +
         eff + i(duration) + i(oldnew) | ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/06
 ```
+:::
+
+## What matters most in the price of a home?
+
+```{r}
+#| include: false
+im <- rd("importance.rds"); SH <- copy(im$SH)
+ia <- SH[job == "A_all"]; ib <- SH[job == "B_all"]; ia2 <- SH[job == "A_all_s2"]
+iv <- function(d, b, v = "share") d[block == b][[v]]
+pc <- function(x) paste0(f1(100 * x), "%")
+sch_b <- c("ofsted", "results", "intake")
+sch <- SH[block %in% sch_b, .(share = sum(share), shapley = sum(shapley), last = sum(last), alone_results = alone[block == "results"]), by = .(job, design, group)]
+```
+
+Before asking how much a school adds, it helps to know how much of a price
+anything explains. We split the model's explained variance between blocks of
+variables in the same way as for Attainment 8 (the *Shared variance and
+relative importance* note in `school_attainment_tool`). Each block's
+**Shapley (LMG) share** is its average contribution over every order in which
+the blocks could enter the model. Variance that two blocks share is divided
+between them, not counted twice, and the shares add up to the full model's R².
+Two simpler measures sit beside it:
+
+- **R² alone:** the block on its own, credited with everything it shares with
+  others.
+- **Added last:** what the block adds once everything else is in. It is
+  credited with nothing shared.
+
+**Location and size are the price of a home. Schools are a small part of it,
+and almost all of that part is location.**
+
+- **The full model** (11 blocks, district and deprivation as location) explains
+  `r pc(ia$full_r2[1])` of the variation in log price.
+- **Where the home is** takes over half of that: the local authority
+  `r pc(iv(ia, "district"))` and neighbourhood deprivation `r pc(iv(ia, "deprivation"))`.
+- **Its size** (floor area and rooms) takes `r pc(iv(ia, "size"))` and its type
+  and built form `r pc(iv(ia, "type"))`.
+- **The nearest schools together** (results, intake and Ofsted grades) take
+  `r pc(sch[job == "A_all", share])`:
+  - results `r pc(iv(ia, "results"))`;
+  - intake `r pc(iv(ia, "intake"))`;
+  - Ofsted grades `r pc(iv(ia, "ofsted"))`.
+- **On their own,** the nearest secondary's results explain
+  `r pc(iv(ia, "results", "alone"))` of the variation in price, more than the
+  age, energy rating and tenure of the home together. That is the raw
+  premium.
+- **Added last,** the three school blocks together add
+  `r f2(100 * sch[job == "A_all", last])` percentage points of R². With the
+  neighbourhood fixed as an LSOA, they add nothing
+  measurable (`r formatC(100 * sch[job == "B_all", last], format = "f", digits = 3)` points).
+  Almost everything schools appear to explain, location explains already.
+- **The age band and energy rating hardly matter** once size and type are
+  known (`r pc(iv(ia, "age"))` and `r pc(iv(ia, "energy"))`).
+
+```{r}
+#| label: fig-importance
+#| fig-cap: "What explains the price of a home: each block's R² on its own, its Shapley (LMG) share, and what it adds when entered last. Location as local authority district and IMD 2025 decile; 250,000 sales sampled from the model sample. Labels: Shapley share of the explained variance."
+knitr::include_graphics(here::here("figures", "importance_district.png"))
+```
+
+```{r}
+#| label: tbl-importance
+#| tbl-cap: "Shapley (LMG) decomposition of R², log price. Location as local authority district and neighbourhood deprivation (design A), or as the LSOA (design B). A second random sample of 250,000 sales gives the same shares to within 0.2 points (column 'A, second sample')."
+lab <- im$labels
+T <- merge(ia[, .(block, label, alone, shapley, share, last)], ia2[, .(block, share2 = share)], by = "block")
+T <- merge(T, ib[, .(block, shareB = share, lastB = last)], by = "block", all = TRUE)
+T[block == "lsoa", label := lab[["lsoa"]]]
+T <- T[order(-pmax(share, shareB, na.rm = TRUE))]
+kable(T[, .(Block = label, `R² alone (A)` = ifelse(is.na(alone), "", f2(alone)), `Shapley R² (A)` = ifelse(is.na(shapley), "", f2(shapley)), `Share (A)` = ifelse(is.na(share), "", pc(share)),
+            `A, second sample` = ifelse(is.na(share2), "", pc(share2)), `Added last (A)` = ifelse(is.na(last), "", formatC(last, format = "f", digits = 4)),
+            `Share (B)` = ifelse(is.na(shareB), "", pc(shareB)), `Added last (B)` = ifelse(is.na(lastB), "", formatC(lastB, format = "f", digits = 4)))])
+```
+
+**With the neighbourhood itself as location (design B)** the full model
+explains `r pc(ib$full_r2[1])`. The LSOA takes `r pc(iv(ib, "lsoa"))` of that
+and size `r pc(iv(ib, "size"))`. The school blocks keep about the same Shapley
+share (`r pc(sch[job == "B_all", share])`). But their added-last contribution
+falls to effectively zero, because almost every school measure is fixed within
+an LSOA.
+
+**Whose results.** Using disadvantaged or non-disadvantaged pupils' results in
+place of all pupils' barely changes the picture:
+
+```{r}
+#| label: fig-importance-groups
+#| fig-cap: "Shapley (LMG) share of the explained variance for the three school blocks, with the nearest secondary's results measured for all, disadvantaged and non-disadvantaged pupils. Design A (district and deprivation) and design B (LSOA)."
+#| fig-height: 3.6
+G <- SH[block %in% sch_b & job != "A_all_s2"][, `:=`(grp = factor(c(all = "All pupils", dis = "Disadvantaged", nd = "Non-disadvantaged")[group], c("All pupils", "Disadvantaged", "Non-disadvantaged")),
+                                                    des = c(A = "A: district and deprivation", B = "B: LSOA")[design], lab = factor(im$labels[block], rev(im$labels[sch_b])))]
+ggplot(G, aes(100 * share, lab, fill = grp)) + geom_col(position = position_dodge(width = 0.75), width = 0.7) + facet_wrap(~des) +
+  scale_fill_manual(values = c("All pupils" = "#361a54", "Disadvantaged" = "#993bff", "Non-disadvantaged" = "#c9a2f5"), name = NULL) +
+  labs(x = "Shapley share of the explained variance (%)", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-importance-groups
+#| tbl-cap: "School blocks: Shapley share of the explained variance and R² alone for the results block, by whose results are used."
+kable(dcast(G[, .(des, Block = lab, grp, v = sprintf("%s (alone %s)", pc(share), f2(alone)))], des + Block ~ grp, value.var = "v")[, .(Design = des, Block, `All pupils`, Disadvantaged, `Non-disadvantaged`)])
+```
+
+- **Disadvantaged pupils' results** carry less (`r pc(iv(SH[job == "A_dis"], "results"))`
+  against `r pc(iv(ia, "results"))`). On their own they explain
+  `r pc(iv(SH[job == "A_dis"], "results", "alone"))` of the variation in price,
+  against `r pc(iv(ia, "results", "alone"))` for all pupils.
+- **Non-disadvantaged pupils' results** carry slightly more
+  (`r pc(iv(SH[job == "A_nd"], "results"))`).
+- **The pattern matches the earlier finding:** buyers track the school's
+  overall standing and intake, not how it does for disadvantaged children.
+
+::: {.callout-tip collapse="true"}
+## The model
+$$\log p_i = \sum_{b \in B} X_{ib}'\beta_b + \sum_{f \in B} \alpha_{f(i)} + \varepsilon_i$$
+
+$B$ is a set of blocks. Each block is either regressors or a set of fixed
+effects:
+
+- size: log floor area, rooms;
+- type: property type, built form;
+- age band;
+- energy efficiency;
+- tenure and new build;
+- [month of sale];
+- [district] with IMD 2025 decile, or [LSOA];
+- Ofsted grade of the nearest primary and secondary;
+- the nearest secondary's standardised Attainment 8 and Value Added v2.1;
+- its free school meals share.
+
+The Shapley value of block $j$, over the $k$ blocks, is
+
+$$\phi_j = \sum_{S \subseteq B \setminus \{j\}} \frac{|S|!\,(k-|S|-1)!}{k!}\left[R^2(S \cup \{j\}) - R^2(S)\right].$$
+
+- **How it is computed:** from the full subset lattice, $2^{11} = 2{,}048$
+  models for design A and $2^{10} = 1{,}024$ for design B, each fitted with
+  `fixest::feols`.
+- **The samples:**
+  - **Model sample:** the `r big(im$n_sales)` sales whose nearest secondary has
+    all six results measures and a free school meals share.
+  - **Design A:** 250,000 random sales, with a second sample of the same size
+    to check stability.
+  - **Design B:** 1,000,000 random sales, so that LSOA effects rest on enough
+    sales.
+
+```r
+feols(lp ~ lfa + i(rooms) + i(propertytype) + i(built_form) + ... + a8_all_z + va_all_z + fsm10 | ym + lad26cd, data = s1)   # one of 2,048 subsets, R/18
+```
+
+- **Limits:** R² decomposition describes the data, not causes.
+- **Measures as proxies:** a block's share depends on how well its measures
+  capture it. Location measured as an LSOA absorbs more than district and IMD
+  can.
 :::
 
 ## In pounds: what a typical home costs extra
