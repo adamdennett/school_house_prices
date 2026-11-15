@@ -34,3 +34,11 @@ Licences:
 ## Step 2: postcode lookup (`R/02_postcode_lookup.R`)
 
 ONS Postcode Directory, August 2026 (ONSPD_AUG_2026.zip, from <https://www.arcgis.com/sharing/rest/content/items/9e5a92a3cfb14dc7ad43d6ea7a7b8c7f/data>, extracted to `data-raw/onspd/`). It gives each postcode in England and Wales, live or terminated, its 2021 OA, LSOA and MSOA, district, coordinates and 2025 IMD rank. Output: `data/postcode_lookup.parquet` (not committed).
+
+### First run (15 November 2026)
+
+- **Read:** 30,529,452 EPC certificates and 29,743,989 Price Paid transactions (1995 to September 2026).
+- **Matched to an EPC:** 24,618,450 (83%), with stage 5 (Beech's unit signature rule) adding 66,719. The run took 5.9 minutes.
+- **Two local changes to the script:** the paths, and DuckDB's old lambda syntax re-enabled for duckdb 2.0.
+- **The output** (`data/pp-psqm.csv`) has date, postcode, county, district, price, floor area, price per m², property type and PPD category.
+- **For the hedonic models,** rooms are in the `epc` table of `data/ppd_epc.duckdb`. Construction age, built form, energy rating and tenure must be joined back from the certificates by certificate number.
