@@ -85,3 +85,15 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
   - **Value added:** the side with the higher value added gets −0.3%.
   - **Within 3 minutes of the line:** +0.4% (−0.2 to 1.0).
   - Magnitudes are about a quarter of G&V's. The nearest school by walking time is a noisier proxy for priority than a catchment, which attenuates.
+- **`R/10_ofsted_event_study.R`:** prices before and after the nearest school's Ofsted grade changes (Sun and Abraham; OA and district × month fixed effects; 2019–2024 regradings). The events:
+  - about 700 secondaries and 2,100 primaries upgraded, and 730 and 2,800 downgraded;
+  - 25,000–37,000 treated OAs per model.
+
+  Average over three years after publication:
+
+  | | Secondary | Primary |
+  |---|---|---|
+  | Upgrade | +0.14% (−0.05 to 0.33) | +0.15% (−0.06 to 0.37) |
+  | Downgrade | −0.10% (−0.29 to 0.08) | −0.02% (−0.23 to 0.19) |
+
+  Secondary upgrades climb slowly to about +0.3% at two to three years and +0.8% at three and a half years, as fewer cohorts are observed that long. Downgrades barely move prices. Some pre-trends: prices near later-downgraded secondaries were already drifting down three years before, and near later-upgraded primaries drifting up.
