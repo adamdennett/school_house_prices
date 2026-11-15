@@ -31,25 +31,28 @@ library(GGally)
 
 options(scipen = 100)
 
-setwd("/Users/chrisbeech/Documents/UK housing analysis")
+# Paths for this project (Adam Dennett, Nov 2026): inputs and outputs via here::here(), and the EPC
+# bulk files in the sibling folder EPC_Data_Analysis. DuckDB's temporary files go to data/duckdb_tmp
+# (line ~502). Otherwise this is Chris Beech's script as published, commit 8514d28 of
+# https://github.com/chris-beech-housing/Land-Registry-PPD-EPC-price-per-square-metre
 
 ## All EPC certificates-YYYY.csv files, from https://get-energy-performance-data.communities.gov.uk/
-epc_dir <- "Data/domestic-csv"
+epc_dir <- file.path(dirname(here::here()), "EPC_Data_Analysis", "domestic-csv")
 
 ## England and Wales price paid data: https://www.gov.uk/guidance/about-the-price-paid-data
-ppd_path <- "Data/pp-complete.csv"
+ppd_path <- here::here("data-raw", "pp-complete.csv")
 
 ## Bin Chi's corrections for addresses written differently in the EPCs and the Land Registry PPD
-rulechi_path <- "Data/rulechi.csv"
+rulechi_path <- here::here("beech-ppd-epc", "Data", "rulechi.csv")
 
 # Stage 5, the unit signature rule, runs after the 250 rules; FALSE leaves it out
 use_unit_signature_rule <- TRUE
 
-db_path <- "Data/datajournal.duckdb"
+db_path <- here::here("data", "ppd_epc.duckdb")
 
 ## Outputs
-psqm_path <- "Data/pp-psqm.csv"
-graph_path <- "Graphs/Main analysis/EPC match percentage.png"
+psqm_path <- here::here("data", "pp-psqm.csv")
+graph_path <- here::here("figures", "EPC match percentage.png")
 
 t_start <- Sys.time()
 
@@ -499,7 +502,7 @@ resolve_ties <- function(candidates) {
 t_part <- Sys.time()
 
 con <- dbConnect(duckdb::duckdb(), dbdir = db_path)
-run_sql(sprintf("SET temp_directory = '%s'", tempdir())) # not the project folder
+run_sql(sprintf("SET temp_directory = '%s'", here::here("data", "duckdb_tmp"))) # not the project folder
 
 # A field as readr reads it: trimmed of spaces and tabs, and missing when empty or NA
 run_sql("CREATE OR REPLACE TEMP MACRO field(x) AS nullif(nullif(trim(x, ' \t'), ''), 'NA')")
