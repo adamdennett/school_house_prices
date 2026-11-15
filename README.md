@@ -119,3 +119,14 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
 ## Report
 
 `report/findings.qmd` gathers R/06 to R/12, with tables, dot-and-interval charts, models and references. Every number is read from `data/*.rds`. Render with `quarto render report/findings.qmd`, which gives `report/findings.html`, self-contained. These are working notes, not for circulation.
+- **`R/14_epc_controls.R`:** two checks on the like-for-like results.
+
+  **A. Control ladder.** Property controls go from none (C0), to Price Paid's type, tenure and new build (C1), to EPC floor area and rooms (C2), to EPC age band, built form and efficiency (C3, the main specification), to every other usable EPC field (C4). Each is run with month effects only, and with month and LSOA effects.
+  - **Month effects only:** Attainment 8 per SD goes from +22.3% (C0) to +18.6% (C3) and +18.2% (C4); nearest secondary Outstanding from +31.5% to +27.2%. The EPC raises the within R² from 0.09 to 0.47, but leaves most of the school premium in place.
+  - **With LSOA effects:** Attainment 8 is +0.81% (C0), +0.68% (C3), +0.66% (C4); Outstanding is +1.07%, +1.00%, +0.97%.
+  - **So the home's characteristics explain little of the raw premium; the neighbourhood explains most of it.**
+
+  **B. Repeat sales.** Same property by EPC UPRN, with property and district × month fixed effects: 554,250 properties, 1.14m sales.
+  - **Nearest secondary Outstanding:** +0.55% (0.32 to 0.78), against +0.80% within LSOA on the same sales.
+  - **Nearest primary Outstanding:** +0.20%.
+  - **Popularity:** secondary +0.17% per SD, primary +0.08% per SD.
