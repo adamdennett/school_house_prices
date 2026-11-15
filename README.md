@@ -30,3 +30,7 @@ Licences:
 - Price Paid Data: Open Government Licence; it contains HM Land Registry data © Crown copyright and database right.
 - EPC data: open data from the Department for Levelling Up, Housing and Communities and its successor, under its own terms. Address data in EPCs is subject to Royal Mail and OS terms.
 - The linkage code: academic use, per its header.
+
+## Step 2: postcode lookup (`R/02_postcode_lookup.R`)
+
+ONS Postcode Directory, August 2026 (ONSPD_AUG_2026.zip, from <https://www.arcgis.com/sharing/rest/content/items/9e5a92a3cfb14dc7ad43d6ea7a7b8c7f/data>, extracted to `data-raw/onspd/`). It gives each postcode in England and Wales, live or terminated, its 2021 OA, LSOA and MSOA, district, coordinates and 2025 IMD rank. Output: `data/postcode_lookup.parquet` (not committed).

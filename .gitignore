@@ -7,3 +7,5 @@ beech-ppd-epc/
 .Rhistory
 .RData
 .Rproj.user
+data/*.parquet
+logs/
