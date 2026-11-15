@@ -66,3 +66,7 @@ ONS Postcode Directory, August 2026 (ONSPD_AUG_2026.zip, from <https://www.arcgi
 | Nearest secondary in top 10% for value added | −10.8% | −4.4% | 0.0% |
 
 Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 like for like, +0.007 within LSOA; value added −0.073, −0.020, −0.002.
+- **`R/08_popularity_models.R`:** popularity (log first preferences per place, standardised) against results and value added, in the same three designs. Within LSOA (4.3m sales):
+  - per standard deviation, together: Attainment 8 +1.15%, value added −0.38%, secondary popularity +0.11%;
+  - alone: secondary popularity +0.27%, primary popularity +0.27%;
+  - an over-subscribed nearest school (2+ first preferences per place): secondary +33% raw, 0% same kind of home, +1.0% within LSOA (1.9% of sales); primary +56% raw, +4.5% same kind of home, +1.4% within LSOA (0.4% of sales).
