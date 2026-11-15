@@ -1,0 +1,351 @@
+---
+title: "House prices near 'good' schools in England"
+subtitle: "First national results: raw premiums, like-for-like premiums, and what buyers pay for"
+author: "Adam Dennett (working notes, with Claude)"
+date: last-modified
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-width: 9
+    fig-height: 5
+    code-fold: true
+    code-summary: "R code"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+suppressPackageStartupMessages({ library(data.table); library(ggplot2); library(knitr) })
+rd <- function(f) readRDS(here::here("data", f))
+pm <- rd("premium_models.rds"); pop <- rd("popularity_models.rds"); gap <- rd("gap_models.rds")
+ev <- rd("ofsted_event_study.rds"); het <- rd("heterogeneity.rds"); tg <- rd("three_groups.rds")
+f1 <- function(x) formatC(x, format = "f", digits = 1); f2 <- function(x) formatC(x, format = "f", digits = 2)
+sg <- function(x) ifelse(x > 0, paste0("+", f1(x)), f1(x)); sg2 <- function(x) ifelse(x > 0, paste0("+", f2(x)), f2(x))
+big <- function(x) format(x, big.mark = ",")
+pal3 <- c("Raw" = "#c9a2f5", "Same kind of home" = "#993bff", "Same home, same neighbourhood" = "#361a54")
+th <- theme_minimal(base_size = 11) + theme(legend.position = "top", plot.title.position = "plot", panel.grid.minor = element_blank())
+mlab <- function(x) factor(x, c("raw", "hedonic", "neighbourhood"), names(pal3))
+pci <- function(b, se) list(pct = 100 * (exp(b) - 1), lo = 100 * (exp(b - 1.96 * se) - 1), hi = 100 * (exp(b + 1.96 * se) - 1))
+E <- copy(pm$est); E[, model := as.character(model)]
+get_p <- function(ind, mod) E[indicator == ind & model == mod, premium]
+```
+
+::: {.callout-note}
+## Status
+Working notes from the private `school_house_prices` repository (R/01 to R/12), not for circulation. All numbers are read from the saved model outputs when this page is rendered.
+:::
+
+## In short
+
+- **The raw premium is real, and about the size the councillor quoted.** Homes with an Outstanding state secondary within 10 minutes' walk sold for `r f1(get_p("outst_sec10", "raw"))`% more than other homes sold in the same month. Where the nearest secondary is in England's top 10% for Attainment 8, the figure is `r sg(get_p("top_att8", "raw"))`%.
+- **Most of it is the kind of home and the kind of area.**
+  - Comparing the same kind of home in the same district, the premiums fall to `r sg(get_p("outst_sec10", "hedonic"))`% and `r sg(get_p("top_att8", "hedonic"))`%.
+  - Comparing homes within the same LSOA (a neighbourhood of about 700 homes), they fall to `r sg(get_p("outst_sec10", "neighbourhood"))`% and `r sg(get_p("top_att8", "neighbourhood"))`%.
+  - This is Tan and Dennett's Brighton result, nationally.
+- **Buyers pay for results and intake, not for value added.**
+  - Within neighbourhoods, a school-level standard deviation of Attainment 8 is worth about 1% of the price.
+  - Value added is worth nothing, or slightly less than nothing.
+  - Higher results only carry a premium when the school also has fewer pupils on free school meals.
+- **The premium is larger where neighbouring schools differ more, and where the address buys priority.**
+  - It is larger where the gap between the two nearest schools is large.
+  - It is larger where the school admits by distance or catchment. There is none where the better school is a faith school.
+- **Prices barely respond when a school's Ofsted grade changes.** Upgrades add a few tenths of a per cent over two to three years. Downgrades show no clear fall.
+
+## Data and how they were linked
+
+| Step | Source | What it gives | Count |
+|---|---|---|---|
+| R/01 | HM Land Registry Price Paid (complete file, October 2026), linked to the EPC register (bulk download, 2008–2026) with Chris Beech's DuckDB version of Bin Chi's address-matching method | Price, date and type of each sale, with floor area and rooms | 24,618,450 of 29,743,989 sales matched (83%) |
+| R/02 | ONS Postcode Directory, August 2026 | 2021 Output Area, LSOA, MSOA, district, IMD 2025 rank | 2,413,799 postcodes |
+| R/03 | EPC register | Construction age band, built form, energy efficiency, tenure | 100% of matched sales |
+| R/04 | National walking routes, `school_active_travel` (Zenodo 10.5281/zenodo.24188820) | Walking minutes from every Output Area to every state school | 870,225 pairs within 20 minutes |
+| R/05 | Ofsted official statistics as at 31 August 2018–2023, and management information as at 30 September 2026; GIAS successor links; Value Added v2.1 and four-year Attainment 8 (`school_value_added`) | Each sale's nearest primary and secondary, their Ofsted grade at the date of sale, minutes to the nearest Outstanding school, and the secondary's Attainment 8 and value added | `r big(6401832)` sales, September 2018 to September 2026 |
+| R/07 | DfE, *Primary and secondary school applications and offers*, school level, entry 2014–2026 | First preferences per place offered; FSM share; faith and selective status | Popularity for 86–87% of sales |
+
+**Sample for the models:**
+
+- standard residential sales (Price Paid category A) with complete EPC attributes;
+- `r big(pm$n_sales)` sales from `r format(pm$years[1], "%B %Y")` to `r format(pm$years[2], "%B %Y")`.
+
+**"Nearest school":** the nearest by walking time from the sale's Output Area. It is not the catchment, which we do not have nationally. Where admission is by distance this is a close proxy; elsewhere it is noisier, and estimates will be pulled towards zero.
+
+## Raw against like for like
+
+```{r}
+#| label: fig-premium
+#| fig-cap: "Price premium near 'good' schools: raw, for the same kind of home in the same district, and for the same kind of home in the same LSOA. Points are estimates; lines are 95% intervals."
+P <- copy(pm$est)[, model := mlab(as.character(model))]
+P[, label := factor(label, rev(unique(pm$est$label)))]
+ggplot(P, aes(premium, label, colour = model)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.6, reverse = TRUE), size = 0.35) +
+  scale_colour_manual(values = pal3, name = NULL) + labs(x = "Price premium (%), 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-premium
+#| tbl-cap: "Price premium (%) with 95% interval, by design. Share = share of sales with the indicator."
+T <- dcast(copy(pm$est)[, cell := sprintf("%s (%s to %s)", sg(premium), f1(lo), f1(hi))][, model := as.character(model)],
+           label + share_treated ~ model, value.var = "cell")
+T <- T[match(unique(pm$est$label), label), .(`Near a 'good' school` = label, Share = paste0(f1(100 * share_treated), "%"),
+                                              Raw = raw, `Same kind of home` = hedonic, `Same home, same LSOA` = neighbourhood)]
+kable(T)
+```
+
+::: {.callout-tip collapse="true"}
+## The models
+For sale $i$ in month $t$, district $d$ (or LSOA $l$), with school indicator $S_i$ and dwelling attributes $X_i$:
+
+$$\log p_i = \beta S_i + \mu_t + \varepsilon_i \qquad \text{(raw)}$$
+$$\log p_i = \beta S_i + X_i'\gamma + \mu_t + \delta_d + \varepsilon_i \qquad \text{(same kind of home)}$$
+$$\log p_i = \beta S_i + X_i'\gamma + \mu_t + \lambda_l + \varepsilon_i \qquad \text{(same home, same neighbourhood)}$$
+
+$X_i$: log floor area, habitable rooms, property type, built form, construction age band, energy efficiency score, tenure, new build. Premium $= 100(e^{\beta} - 1)$. Standard errors are clustered by MSOA.
+
+```r
+feols(lp ~ outst_sec10 + lfa + i(rooms) + i(propertytype) + i(built_form) + i(construction_age_band) +
+        eff + i(duration) + i(oldnew) | ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/06
+```
+:::
+
+## Results, value added and popularity
+
+The nearest secondary's Attainment 8, value added and popularity (log first preferences per place) are entered together, each per standard deviation (R/08).
+
+```{r}
+#| label: fig-sec3
+#| fig-cap: "Premium per standard deviation of each measure, entered together (nearest state secondary)."
+X <- copy(pop$sec3)[, c("pct", "lo", "hi") := pci(b, se)][, model := mlab(model)]
+X[, term := factor(term, rev(c("att8_z", "va_z", "pop_z")), rev(c("Attainment 8", "Value added", "Popularity (first preferences per place)")))]
+ggplot(X, aes(pct, term, colour = model)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.6, reverse = TRUE), size = 0.35) +
+  scale_colour_manual(values = pal3, name = NULL) + labs(x = "Price premium (%) per standard deviation, 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-sec3
+#| tbl-cap: "Premium (%) per standard deviation, the three measures together."
+kable(dcast(X[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))], term ~ model, value.var = "cell")[order(-as.integer(term))], col.names = c("Measure", levels(X$model)))
+```
+
+**Popularity carries almost nothing once results are known.**
+
+- Within LSOAs:
+  - an over-subscribed nearest secondary (two or more first preferences per place) adds `r sg(pci(pop$sec_over[model == "neighbourhood", b], pop$sec_over[model == "neighbourhood", se])$pct)`%;
+  - an over-subscribed primary adds `r sg(pci(pop$pri_over[model == "neighbourhood", b], pop$pri_over[model == "neighbourhood", se])$pct)`%.
+- Raw, the same comparisons are `r sg(pci(pop$sec_over[model == "raw", b], 0)$pct)`% and `r sg(pci(pop$pri_over[model == "raw", b], 0)$pct)`%.
+- Only `r f1(100 * pop$share_over_sec)`% of sales are near such a secondary, and `r f1(100 * pop$share_over_pri)`% near such a primary.
+
+::: {.callout-tip collapse="true"}
+## The model
+$$\log p_i = \beta_1 A8_{s(i)} + \beta_2 VA_{s(i)} + \beta_3 \log(\text{first prefs per place})_{s(i)} + \theta\,\text{grammar}_{s(i)} + X_i'\gamma + \mu_t + \lambda_l + \varepsilon_i$$
+with $s(i)$ the nearest state secondary, each measure standardised.
+
+```r
+feols(lp ~ att8_z + va_z + pop_z + sel + <controls> | ym + lsoa21cd, data = Sec, cluster = ~msoa21cd)   # R/08
+```
+:::
+
+## Whose results? All, disadvantaged and non-disadvantaged pupils
+
+Each pupil group's Attainment 8 and value added at the nearest secondary is entered together, one group at a time, on the same `r big(tg$n)` sales (R/12).
+
+```{r}
+#| label: fig-three
+#| fig-cap: "Premium per school-level standard deviation of the nearest secondary's Attainment 8 and value added, by pupil group."
+G3 <- rbind(tg$g_all, tg$g_dis, tg$g_nd)
+G3[, `:=`(measure = fifelse(grepl("^a8", term), "Attainment 8", "Value added"), model = mlab(model),
+          group = factor(group, rev(c("All pupils", "Disadvantaged pupils", "Non-disadvantaged pupils"))))]
+ggplot(G3, aes(pct, group, colour = model)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.6, reverse = TRUE), size = 0.35) +
+  facet_wrap(~measure, scales = "free_x") + scale_colour_manual(values = pal3, name = NULL) +
+  labs(x = "Price premium (%) per standard deviation, 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-three
+#| tbl-cap: "Premium (%) per standard deviation, by pupil group (each group's two measures together)."
+kable(dcast(G3[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))], group + measure ~ model, value.var = "cell")[order(-as.integer(group), measure)],
+      col.names = c("Pupil group", "Measure", levels(G3$model)))
+```
+
+```{r}
+#| label: tbl-joint
+#| tbl-cap: "Disadvantaged and non-disadvantaged pupils' Attainment 8 together, with the school's free school meals share (per 10 percentage points)."
+J <- copy(tg$joint)[, model := mlab(model)][, term := factor(term, c("a8_dis_z", "a8_nd_z", "fsm10"),
+                                                              c("Attainment 8, disadvantaged pupils (per SD)", "Attainment 8, non-disadvantaged pupils (per SD)", "FSM share (per 10 points)"))]
+kable(dcast(J[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))], term ~ model, value.var = "cell"), col.names = c("", levels(J$model)))
+```
+
+**The intake is what is priced.**
+
+- **Each group alone:** within neighbourhoods, a standard deviation of the nearest secondary's Attainment 8 is worth about the same whichever group it is measured for:
+  - all pupils `r sg(tg$g_all[model == "neighbourhood" & term == "a8_all_z", pct])`%;
+  - disadvantaged pupils `r sg(tg$g_dis[model == "neighbourhood" & term == "a8_dis_z", pct])`%;
+  - non-disadvantaged pupils `r sg(tg$g_nd[model == "neighbourhood" & term == "a8_nd_z", pct])`%.
+- **Value added** is zero or slightly negative for every group.
+- **Together with the free school meals share:** the FSM share carries the premium, at `r sg(tg$joint[model == "neighbourhood" & term == "fsm10", pct])`% per 10 percentage points. The two groups' results add little or nothing.
+- **What a buyer gets:** the price follows who goes to the school more than how well a child like the buyer's would do there.
+
+## Where neighbouring schools differ
+
+This is a walking-time version of the catchment-boundary design in Greaves and Venturin (2026).
+
+- **The sample:** `r big(gap$n_lsoa)` LSOAs split between two nearest state secondaries, with `r big(gap$n_sales)` sales.
+- **The comparison:** like-for-like homes in the same LSOA, on the side whose nearest school has the higher Attainment 8 against the other side (R/09).
+- **Overall:** the better side sells for `r sg(gap$m1$pct)`% (`r f2(gap$m1$lo)` to `r f2(gap$m1$hi)`).
+
+```{r}
+#| label: fig-gap
+#| column: page-right
+#| fig-height: 6.5
+#| fig-cap: "Premium on the side whose nearest secondary has higher Attainment 8, same LSOA, like-for-like homes. Dark points: only sales within 3 minutes' walk of the line where the nearest school changes."
+lab <- function(d, panel, set) copy(d)[, .(panel, set, group = sub(".*::", "", sub(":better$", "", term)), pct, lo, hi)]
+F <- rbind(lab(gap$m1[, term := "All split LSOAs"], "Overall", "All sales"), lab(gap$m6[, term := "All split LSOAs"], "Overall", "Within 3 min of the line"),
+           lab(gap$m2, "Attainment 8 gap", "All sales"), lab(gap$m6g, "Attainment 8 gap", "Within 3 min of the line"),
+           lab(gap$m3, "Where the pair sits", "All sales"), lab(gap$m3q, "Pair's quartiles", "All sales"),
+           lab(gap$m4, "Free school meals", "All sales"), lab(het$better_by_adm, "Better school admits by", "All sales"))
+F[, panel := factor(panel, unique(panel))]
+ggplot(F, aes(pct, group, colour = set)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), position = position_dodge2(width = 0.5, reverse = TRUE), size = 0.3) +
+  facet_grid(panel ~ ., scales = "free_y", space = "free_y", switch = "y") +
+  scale_colour_manual(values = c("All sales" = "#993bff", "Within 3 min of the line" = "#361a54"), name = NULL) +
+  labs(x = "Premium (%) on the better side, 95% interval", y = NULL) + th +
+  theme(strip.placement = "outside", strip.text.y.left = element_text(angle = 0, face = "bold", hjust = 1))
+```
+
+```{r}
+#| label: tbl-gap
+#| tbl-cap: "Premium (%) on the better side, with 95% interval."
+kable(F[, .(Comparison = panel, Group = group, Sales = set, Premium = sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi)))])
+```
+
+**What this shows**
+
+- **Gap size:** the premium rises with the size of the gap. In the top quartile (`r f1(gap$gap_cuts[4])` to `r f1(gap$gap_cuts[5])` Attainment 8 points) it is `r sg(gap$m2[grepl("Q4", term), pct])`%.
+- **Where the pair sits:** it is clearest for "reaching the top" (third against fourth national quartile). There is no clear premium where both schools are below the median.
+- **Results and intake:** it appears only where the higher-results school also has fewer pupils on free school meals.
+- **Value added:** the side with the higher value added is worth `r sg(gap$m5[term == "better_va", pct])`%.
+- **Admissions:** where the better school is a faith school, which mostly admits by faith rather than address, the premium is zero.
+- **Compared with Greaves and Venturin:** the pattern matches their findings, but the magnitudes are about a quarter of theirs (their average is 2.5%, and 6.5% for large gaps). A walking-time "nearest school" is a noisier measure of priority than a catchment.
+
+::: {.callout-tip collapse="true"}
+## The model
+For LSOAs split between two nearest secondaries, $B_i = 1$ if sale $i$'s nearest secondary is the one with the higher Attainment 8:
+$$\log p_i = \sum_k \beta_k B_i \cdot 1[\text{group}_l = k] + X_i'\gamma + \mu_t + \lambda_l + \varepsilon_i$$
+```r
+feols(lp ~ i(gap_q, better) + <controls> | ym + lsoa21cd, data = G, cluster = ~msoa21cd)   # R/09
+```
+:::
+
+## When the Ofsted grade changes
+
+This is an event study around the publication of a graded inspection that changed the nearest school's grade, March 2019 to December 2024. It uses Sun and Abraham's estimator with OA and district × month fixed effects, and compares against OAs whose nearest school was not regraded (R/10).
+
+```{r}
+#| label: fig-event
+#| fig-cap: "Price change relative to the half-year before publication (%), 95% interval."
+es <- rbind(copy(ev$es), unique(ev$es[, .(phase, kind)])[, .(phase, kind, rel = -1L, b = 0, se = 0)])
+es[, c("pct", "lo", "hi") := pci(b, se)][, years := (rel + 0.5) / 2][, panel := paste0(tools::toTitleCase(phase), ": ", tolower(kind))]
+ggplot(es[abs(rel) < 8], aes(years, pct)) + geom_hline(yintercept = 0, colour = "#6b6680") + geom_vline(xintercept = 0, linetype = 2, colour = "#6b6680") +
+  geom_ribbon(aes(ymin = lo, ymax = hi), fill = "#c9a2f5", alpha = 0.5) + geom_line(colour = "#361a54", linewidth = 0.6) + geom_point(colour = "#361a54", size = 1.5) +
+  facet_wrap(~panel) + labs(x = "Years from publication", y = "Price change (%)") + th
+```
+
+```{r}
+#| label: tbl-event
+#| tbl-cap: "Average price change over the three years after publication (%), 95% interval."
+A <- merge(copy(ev$att), ev$info[, .(phase = sub(" .*", "", model), kind = sub(".* ", "", model), oas_treated, schools)], by = c("phase", "kind"))
+kable(A[, .(Phase = tools::toTitleCase(phase), Change = kind, `Schools` = big(schools), `OAs` = big(oas_treated),
+            `Price change` = sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi)))])
+```
+
+**Prices respond slowly and only a little.**
+
+- Secondary upgrades build to about +0.3% after two years, and more for the few cohorts observed longest.
+- Downgrades show no clear fall.
+- There is some sign of pre-trends, so these are not clean causal estimates.
+
+::: {.callout-tip collapse="true"}
+## The model
+$$\log p_{it} = \sum_{e \neq -1} \beta_e\, 1[t - E_{o(i)} = e] + X_i'\gamma + \alpha_{o(i)} + \mu_{d,t} + \varepsilon_{it}$$
+with $E_o$ the half-year in which Output Area $o$'s nearest school was regraded, estimated with interaction weights by cohort:
+```r
+feols(lp ~ sunab(cohort, period, ref.p = -1) + <controls> | oa21cd + lad26cd^ym, data = D, cluster = ~oa21cd)   # R/10
+```
+:::
+
+## Where buyers pay most
+
+This is the within-LSOA premium per school-level standard deviation of the nearest secondary's Attainment 8, with value added held constant, by group (R/11). Overall it is `r sg(100 * (exp(het$overall["att8_z", 1]) - 1))`%.
+
+```{r}
+#| label: fig-het
+#| column: page-right
+#| fig-height: 7
+#| fig-cap: "Within-neighbourhood premium per standard deviation of Attainment 8, by group, 95% interval."
+lab_dim <- c(admissions = "Admissions", la_bh = "Brighton and Hove", region = "Region", imd = "Deprivation (IMD)", urban = "Urban or rural")
+H <- copy(het$H)[measure == "Attainment 8"][, dim := factor(lab_dim[dim], lab_dim)]
+H[, ord := fifelse(dim == "Deprivation (IMD)", -as.numeric(gsub("\\D", "", group)), pct)]
+ggplot(H, aes(pct, reorder(group, ord))) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), colour = "#993bff", size = 0.3) +
+  facet_grid(dim ~ ., scales = "free_y", space = "free_y", switch = "y") +
+  labs(x = "Premium (%) per SD of Attainment 8, same home, same LSOA", y = NULL) + th +
+  theme(strip.placement = "outside", strip.text.y.left = element_text(angle = 0, face = "bold", hjust = 1))
+```
+
+```{r}
+#| label: tbl-het
+#| tbl-cap: "Within-neighbourhood premium (%) per SD of Attainment 8 and of value added, by group."
+kable(dcast(copy(het$H)[, cell := sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi))][, dim := lab_dim[dim]], dim + group + sales ~ measure, value.var = "cell")[, sales := big(sales)],
+      col.names = c("Dimension", "Group", "Sales", "Attainment 8", "Value added"))
+```
+
+**What this shows**
+
+- **Admissions are the clearest divide.** The premium is largest where the nearest secondary admits mostly by distance or catchment, smaller for faith schools, and absent for grammar schools.
+- **Brighton and Hove** has too few sales (`r big(het$H[group == "Brighton and Hove", sales][1])`) for a city-level estimate to say anything.
+- **Region:** the premium is highest in Yorkshire and The Humber and Inner London, and lowest in the South East.
+- **Deprivation:** there is no clear gradient.
+
+::: {.callout-tip collapse="true"}
+## The model
+$$\log p_i = \sum_k \beta_k\, A8_{s(i)} 1[g_i = k] + \sum_k \theta_k\, VA_{s(i)} 1[g_i = k] + X_i'\gamma + \mu_t + \lambda_l + \varepsilon_i$$
+```r
+feols(lp ~ i(admissions, att8_z) + i(admissions, va_z) + <controls> | ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/11
+```
+:::
+
+## The "20 to 25 per cent" figure
+
+- **The claim:** a Brighton and Hove councillor said (13 November 2026) that, nationally, house prices had gone up by 20 to 25% close to the most popular and successful schools.
+- **The source:** I have not found it.
+- **Published industry figures** are unadjusted area comparisons of 12–18%: Rightmove (18%, Outstanding primaries), HouseSimple (18%), Savills (16%), Lloyds (12–13%) and Knight Frank (16.6%).
+- **Our raw comparisons** are in the same range or higher (20–37%).
+- **The like-for-like premium** is a small fraction of that: 2–5% for the same kind of home in the same district, and about 1% within the same neighbourhood.
+
+## Caveats
+
+- **"Nearest by walking time" is not the catchment.** Misclassification pulls estimates towards zero, especially in the split-LSOA design.
+- **LSOA fixed effects may over-control.** Neighbourhood quality is partly caused by the school, through who moves in. The within-LSOA estimates are a lower bound on what a family pays for "the area with the good school".
+- **School measures:** Attainment 8 and value added are four-year averages for 2021/22 to 2024/25, not the figures buyers saw at the time of each sale (2018–2026). Ofsted grades are at the date of sale.
+- **The sample:** sales matched to an EPC (83%). Category A sales only.
+- **Not yet done:**
+  - lines that coincide with major roads, rivers or railways have not been removed (Greaves and Venturin do);
+  - only the within-3-minutes check is in place.
+
+## References
+
+- Black, S. E. (1999) Do better schools matter? Parental valuation of elementary education. *Quarterly Journal of Economics*, 114(2), 577–599.
+- Black, S. E. and Machin, S. (2011) Housing valuations of school performance. In *Handbook of the Economics of Education*, vol. 3, 485–519.
+- Chi, B., Dennett, A., Oléron-Evans, T. and Morphet, R. A new attribute-linked residential property price dataset for England and Wales, 2011 to 2019. UCL CASA [year and working paper number to check]. (The address-matching method; run here through Chris Beech's DuckDB version, github.com/chris-beech-housing/Land-Registry-PPD-EPC-price-per-square-metre.)
+- Gibbons, S. and Machin, S. (2006) Paying for primary schools: admission constraints, school popularity or congestion? *Economic Journal*, 116(510), C77–C92.
+- Gibbons, S., Machin, S. and Silva, O. (2013) Valuing school quality using boundary discontinuities. *Journal of Urban Economics*, 75, 15–28.
+- Greaves, E. and Venturin, A. (2026) Re-examining the property price premium around 'better' schools. IZA Discussion Paper 18750.
+- Hussain, I. (2023) Housing market and school choice response to school quality information shocks. *Journal of Urban Economics* [volume and pages to check]; as cited by Greaves and Venturin.
+- Sun, L. and Abraham, S. (2021) Estimating dynamic treatment effects in event studies with heterogeneous treatment effects. *Journal of Econometrics*, 225(2), 175–199.
+- Tan, J. and Dennett, A. CUPUM book chapter on schools and house prices in Brighton and Hove [full title and year to check].

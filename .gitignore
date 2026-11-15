@@ -8,5 +8,7 @@ beech-ppd-epc/
 .RData
 .Rproj.user
 data/*.parquet
+report/findings_files/
+report/.quarto/
 logs/
 Rplots.pdf

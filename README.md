@@ -110,3 +110,12 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
     - lowest: South East +0.1%, East Midlands +0.3%.
   - **Deprivation:** no clear gradient; the least deprived quintile is lowest at +0.3%.
   - **Rural schools** +1.2%, urban +0.7%.
+- **`R/12_three_groups.R`:** the nearest secondary's Attainment 8 and value added for all, disadvantaged and non-disadvantaged pupils (4.35m sales). Within LSOA, per SD:
+  - **Attainment 8:** all +0.67%, disadvantaged +0.48%, non-disadvantaged +0.68%.
+  - **Value added:** −0.22%, −0.33% and −0.32%.
+  - **Together with the free school meals share,** the FSM share carries it: −0.99% per 10 percentage points. Non-disadvantaged Attainment 8 +0.5% (not significant); disadvantaged −0.8%.
+  - **The intake is what is priced.**
+
+## Report
+
+`report/findings.qmd` gathers R/06 to R/12, with tables, dot-and-interval charts, models and references. Every number is read from `data/*.rds`. Render with `quarto render report/findings.qmd`, which gives `report/findings.html`, self-contained. These are working notes, not for circulation.
