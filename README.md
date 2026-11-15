@@ -70,3 +70,18 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
   - per standard deviation, together: Attainment 8 +1.15%, value added −0.38%, secondary popularity +0.11%;
   - alone: secondary popularity +0.27%, primary popularity +0.27%;
   - an over-subscribed nearest school (2+ first preferences per place): secondary +33% raw, 0% same kind of home, +1.0% within LSOA (1.9% of sales); primary +56% raw, +4.5% same kind of home, +1.4% within LSOA (0.4% of sales).
+- **`R/09_quality_gap.R`:** a walking-time analogue of Greaves and Venturin's (2026) boundary design. It covers the 7,599 LSOAs split between two nearest state secondaries (1.07m sales), and compares homes on the side whose nearest school has the higher Attainment 8 with homes on the other side, like for like, within the LSOA.
+  - **Better side overall:** +0.64% (0.34 to 0.93).
+  - **By Attainment 8 gap quartile:** +0.1%, +0.6%, +0.8%, +1.1%.
+  - **By pair position:**
+    - both below the national median: +0.3% (not significant);
+    - straddling: +0.8%;
+    - both above: +0.75%;
+    - Q3 against Q4 ("reaching the top"): +1.4%;
+    - Q1 against Q2 ("escaping the bottom"): +0.4% (not significant).
+  - **Free school meals:**
+    - higher results and fewer FSM pupils: +0.9%;
+    - higher results but more FSM pupils: −0.2%. This is the G&V "bundle".
+  - **Value added:** the side with the higher value added gets −0.3%.
+  - **Within 3 minutes of the line:** +0.4% (−0.2 to 1.0).
+  - Magnitudes are about a quarter of G&V's. The nearest school by walking time is a noisier proxy for priority than a catchment, which attenuates.
