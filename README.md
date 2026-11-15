@@ -42,3 +42,14 @@ ONS Postcode Directory, August 2026 (ONSPD_AUG_2026.zip, from <https://www.arcgi
 - **Two local changes to the script:** the paths, and DuckDB's old lambda syntax re-enabled for duckdb 2.0.
 - **The output** (`data/pp-psqm.csv`) has date, postcode, county, district, price, floor area, price per m², property type and PPD category.
 - **For the hedonic models,** rooms are in the `epc` table of `data/ppd_epc.duckdb`. Construction age, built form, energy rating and tenure must be joined back from the certificates by certificate number.
+
+## Steps 3 to 6
+
+- **`R/03_epc_attributes.R`:** joins each matched sale's EPC back to the raw certificates. It uses the same keys Beech's script builds: postcode, tidied address, dates, floor area and rooms. This adds construction age band, built form, energy rating, EPC tenure, heated rooms, floor level, extensions, main fuel and UPRN. All 24,618,450 matched sales found their certificate (age band for all but 153; built form for 98.6%).
+- **`R/04_oa_schools.R`:** from the national walking routes (`../school_active_travel`, Zenodo 10.5281/zenodo.24188820), every Output Area to state school pair within 20 minutes (870,225 pairs), and each Output Area's nearest state primary and secondary.
+- **`R/05_sales_panel.R`:** sales from September 2018 to September 2026 (6,401,832) with:
+  - Output Area, LSOA, MSOA, district and IMD;
+  - the nearest primary and secondary and their Ofsted grades at the date of sale, from the year-end files as at 31 August 2018–2023 and the latest graded inspection as at September 2026, with URNs followed through GIAS successor links;
+  - minutes to the nearest Outstanding, and Good or better, primary and secondary;
+  - the nearest secondary's Value Added v2.1 and four-year Attainment 8 (from `../school_value_added`).
+- **`R/06_premium_models.R`:** the premium near "good" schools, raw, then for the same kind of home (dwelling attributes with district effects), then within the same LSOA. Also Attainment 8 and value added together.
