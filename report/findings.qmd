@@ -25,6 +25,9 @@ rd <- function(f) readRDS(here::here("data", f))
 pm <- rd("premium_models.rds"); pop <- rd("popularity_models.rds"); gap <- rd("gap_models.rds")
 ev <- rd("ofsted_event_study.rds"); het <- rd("heterogeneity.rds"); tg <- rd("three_groups.rds")
 ec <- rd("epc_controls.rds"); bm <- rd("barrier_models.rds"); bh <- rd("bh_catchments.rds")
+ks <- rd("ks4_at_sale.rds"); pp <- rd("premium_pounds.rds")
+gbp <- function(x) paste0(ifelse(x < 0, "−£", "£"), formatC(round(abs(x), -2), format = "d", big.mark = ","))
+p25 <- function(t, d) pp$P[indicator == "near_sec_out" & yr == 2025 & type == t & design == c("raw", "district", "lsoa")[d]]
 f1 <- function(x) formatC(x, format = "f", digits = 1); f2 <- function(x) formatC(x, format = "f", digits = 2)
 sg <- function(x) ifelse(x > 0, paste0("+", f1(x)), f1(x)); sg2 <- function(x) ifelse(x > 0, paste0("+", f2(x)), f2(x))
 big <- function(x) format(x, big.mark = ",")
@@ -48,6 +51,11 @@ Working notes from the private `school_house_prices` repository (R/01 to R/15), 
   - Comparing the same kind of home in the same district, the premiums fall to `r sg(get_p("outst_sec10", "hedonic"))`% and `r sg(get_p("top_att8", "hedonic"))`%.
   - Comparing homes within the same LSOA (a neighbourhood of about 700 homes), they fall to `r sg(get_p("outst_sec10", "neighbourhood"))`% and `r sg(get_p("top_att8", "neighbourhood"))`%.
   - This is Tan and Dennett's Brighton result, nationally.
+  - **In pounds (2025, a semi-detached house at the median price):**
+    - near an Outstanding secondary, about `r gbp(p25("Semi-detached", 1)$gbp)` more raw;
+    - `r gbp(p25("Semi-detached", 2)$gbp)` for the same kind of home in the same local authority;
+    - effectively nothing in the same neighbourhood.
+    - See [In pounds](#in-pounds-what-a-typical-home-costs-extra).
   - **It holds with every characteristic of the home we can get from its EPC, and for the same property sold twice.** It is the neighbourhood, more than the home, that accounts for the raw gap. See [Does it hold with every property characteristic?](#does-it-hold-with-every-property-characteristic)
 - **Buyers pay for results and intake, not for value added.**
   - Within neighbourhoods, a school-level standard deviation of Attainment 8 is worth about 1% of the price.
@@ -57,6 +65,12 @@ Working notes from the private `school_house_prices` repository (R/01 to R/15), 
   - It is larger where the gap between the two nearest schools is large.
   - It is larger where the school admits by distance or catchment. There is none where the better school is a faith school.
 - **In Brighton and Hove, real catchment boundaries show no price jump at the line.** This is consistent with random allocation within catchments since 2008, and with Tan and Dennett. See [Brighton and Hove: real catchments](#brighton-and-hove-real-catchments)
+- **Buyers price a school's standing, not this year's results.** Year-to-year changes in published Attainment 8 are barely priced. See [Results at the date of sale](#results-at-the-date-of-sale).
+- **This corroborates Greaves and Venturin (2026), on a national design.**
+  - **What we share:** a small premium, concentrated where schools differ most and bundled with intake; value added unpriced.
+  - **What differs:** ours is smaller still, and we find no "escaping the bottom" premium.
+  - **What is new here:** admission rules, popularity, change over time, repeat sales and Brighton and Hove's real catchments.
+  - See [How this compares](#how-this-compares-with-greaves-and-venturin-2026).
 - **Prices barely respond when a school's Ofsted grade changes.** Upgrades add a few tenths of a per cent over two to three years. Downgrades show no clear fall.
 
 ## Data and how they were linked
@@ -116,6 +130,74 @@ feols(lp ~ outst_sec10 + lfa + i(rooms) + i(propertytype) + i(built_form) + i(co
         eff + i(duration) + i(oldnew) | ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/06
 ```
 :::
+
+## In pounds: what a typical home costs extra
+
+Percentages hide what people pay, so R/16 converts them to pounds.
+
+- **The estimate:** the premium is estimated separately for each property type in each year. Each type-year is compared with homes of the same type sold that year, in the same three designs.
+- **The conversion:** each premium is applied to that type's median price that year (England, all matched sales).
+- **The measure:** "near a good school" here is "the nearest state secondary is Outstanding" at the date of sale (`r f1(100 * E[indicator == "near_sec_out" & model == "raw", share_treated])`% of sales).
+
+```{r}
+#| label: setup-pounds
+PP <- copy(pp$P)[indicator == "near_sec_out"]
+PP[, `:=`(design = factor(design, c("raw", "district", "lsoa"), c("Raw: homes of the same type sold that year", "Same kind of home, same local authority", "Same kind of home, same neighbourhood (LSOA)")),
+          type = factor(type, c("Detached", "Semi-detached", "Terraced", "Flat or maisonette")))]
+P25 <- PP[yr == 2025]
+```
+
+```{r}
+#| label: fig-pounds-2025
+#| fig-height: 5.5
+#| fig-width: 10
+#| column: page-right
+#| fig-cap: "Extra paid in 2025 for a home whose nearest state secondary is Outstanding, by property type: raw, like for like in the same local authority, and like for like in the same neighbourhood. Bars are estimates, whiskers 95% intervals. Panel titles give the median price of that type in 2025."
+lab25 <- unique(P25[, .(type, median_price)])[order(type)][, lab := paste0(type, " (median ", gbp(median_price), ")")]
+P25b <- merge(P25, lab25[, .(type, lab)], by = "type")[, lab := factor(lab, lab25$lab)]
+P25b[, short := factor(as.integer(design), 1:3, c("Raw", "Same local\nauthority", "Same\nneighbourhood"))]
+ggplot(P25b, aes(short, gbp / 1000, fill = design)) + geom_hline(yintercept = 0, colour = "#6b6680") +
+  geom_col(width = 0.7) + geom_errorbar(aes(ymin = gbp_lo / 1000, ymax = gbp_hi / 1000), width = 0.2, colour = "#6b6680") +
+  geom_text(aes(label = gbp(gbp), y = pmax(gbp_hi, 0) / 1000), vjust = -0.5, size = 3.4) +
+  facet_wrap(~lab, nrow = 1) + scale_fill_manual(values = c("#c9a2f5", "#993bff", "#361a54"), guide = "none") +
+  scale_y_continuous(labels = function(x) paste0("£", x, "k"), expand = expansion(mult = c(0.05, 0.12))) +
+  labs(x = NULL, y = "Extra paid (£)") + th + theme(strip.text = element_text(face = "bold"))
+```
+
+```{r}
+#| label: fig-pounds
+#| fig-height: 4.6
+#| column: page-right
+#| fig-cap: "Extra paid for a home whose nearest state secondary is Outstanding, by property type and year (95% intervals)."
+ggplot(PP, aes(yr, gbp / 1000, colour = design, fill = design)) + geom_hline(yintercept = 0, colour = "#6b6680") +
+  geom_ribbon(aes(ymin = gbp_lo / 1000, ymax = gbp_hi / 1000), alpha = 0.18, colour = NA) + geom_line(linewidth = 0.7) + geom_point(size = 1.3) +
+  facet_wrap(~type, nrow = 1) + scale_colour_manual(values = c("#c9a2f5", "#993bff", "#361a54"), name = NULL, aesthetics = c("colour", "fill")) +
+  guides(colour = guide_legend(nrow = 3), fill = guide_legend(nrow = 3)) +
+  scale_x_continuous(breaks = seq(2018, 2026, 2)) + scale_y_continuous(labels = function(x) paste0("£", x, "k")) +
+  labs(x = NULL, y = "Extra paid (£)") + th
+```
+
+```{r}
+#| label: tbl-pounds
+#| tbl-cap: "Extra paid for a home whose nearest state secondary is Outstanding (% and £, applied to the median price of that type that year)."
+T <- dcast(PP[, cell := sprintf("%s%% (%s)", sg(pct), gbp(gbp))], type + yr + median_price ~ design, value.var = "cell")
+kable(T[, .(Type = type, Year = yr, `Median price` = gbp(median_price), Raw = `Raw: homes of the same type sold that year`,
+            `Same local authority` = `Same kind of home, same local authority`, `Same LSOA` = `Same kind of home, same neighbourhood (LSOA)`)])
+```
+
+**In 2025, for a semi-detached house at the median price (`r gbp(p25("Semi-detached", 1)$median_price)`):**
+
+- **Raw gap:** one whose nearest secondary is Outstanding sold for about `r gbp(p25("Semi-detached", 1)$gbp)` more than other semis that year.
+- **Like for like in the same local authority:** about `r gbp(p25("Semi-detached", 2)$gbp)`.
+- **Like for like in the same neighbourhood:** `r gbp(p25("Semi-detached", 3)$gbp)`, effectively nothing.
+
+The other types:
+
+- **Terraced** (median `r gbp(p25("Terraced", 1)$median_price)`): `r gbp(p25("Terraced", 1)$gbp)` raw, `r gbp(p25("Terraced", 2)$gbp)` in the same authority, `r gbp(p25("Terraced", 3)$gbp)` in the same neighbourhood.
+- **Detached** (median `r gbp(p25("Detached", 1)$median_price)`): `r gbp(p25("Detached", 1)$gbp)`, `r gbp(p25("Detached", 2)$gbp)` and `r gbp(p25("Detached", 3)$gbp)`.
+- **Flats** (median `r gbp(p25("Flat or maisonette", 1)$median_price)`): `r gbp(p25("Flat or maisonette", 1)$gbp)`, `r gbp(p25("Flat or maisonette", 2)$gbp)` and `r gbp(p25("Flat or maisonette", 3)$gbp)`.
+
+**The like-for-like premium has shrunk since 2018,** for every type. One likely reason: "Outstanding" has grown stale. Many Outstanding schools went years without inspection, and graded inspections ended in September 2024. The raw gap has grown with prices.
 
 ## Does it hold with every property characteristic?
 
@@ -652,6 +734,87 @@ feols(lp ~ up:post_ann + down:post_ann + <controls> | oa21cd + ym, data = RL, cl
 ```
 :::
 
+## Results at the date of sale
+
+- **The problem:** the models above use a four-year mean Attainment 8 (2021/22 to 2024/25) for every sale, whenever it happened.
+- **The fix (R/17):** each sale gets the results a buyer could have seen, the latest performance tables published before the sale. These are standardised within each results year, because grading changed between years.
+- **Coverage:** no school tables were published for 2019/20 or 2020/21, and the archived 2016/17 to 2018/19 tables are not yet in hand. So this covers sales from October 2022 (when the 2021/22 tables appeared) to September 2026, `r big(ks$info$n)` sales.
+
+```{r}
+#| label: fig-ks4
+#| fig-cap: "Premium per standard deviation of the nearest secondary's published Attainment 8 at the date of sale, by design (95% intervals). Sales October 2022 to September 2026."
+K4 <- copy(ks$R)[, lab := paste0(model, fifelse(term == "att8_4yr_z", " (four-year mean)", fifelse(term == "z_prev", " (previous year's level)", fifelse(term == "news", " (change from previous year)", ""))))]
+K4[, lab := factor(lab, rev(lab))]
+ggplot(K4, aes(pct, lab)) + geom_vline(xintercept = 0, colour = "#6b6680") +
+  geom_pointrange(aes(xmin = lo, xmax = hi), colour = "#993bff", size = 0.3) + labs(x = "Price premium (%) per SD, 95% interval", y = NULL) + th
+```
+
+```{r}
+#| label: tbl-ks4
+#| tbl-cap: "Premium (%) per standard deviation of published Attainment 8, with 95% interval."
+kable(K4[, .(Model = model, Term = term, Premium = sprintf("%s (%s to %s)", sg2(pct), f2(lo), f2(hi)), Sales = big(n))])
+```
+
+```{r}
+#| label: setup-ks4
+kr <- function(m, t) ks$R[model == m & term == t]
+```
+
+**Buyers price a school's standing, not this year's results.**
+
+- **Within the same LSOA,** the results published at the date of sale are worth `r sg2(kr("Same LSOA: results at the date of sale", "att8_sale_z")$pct)`% per standard deviation. That is close to the four-year mean's value.
+- **Entered together,** the four-year mean carries more (`r sg2(kr("Same LSOA: date of sale and four-year mean together", "att8_4yr_z")$pct)`%) than the latest year (`r sg2(kr("Same LSOA: date of sale and four-year mean together", "att8_sale_z")$pct)`%).
+- **Year-to-year changes are small and barely priced.**
+  - **Within the same school,** a standard deviation of change in published results is worth `r sg2(kr("Within school: year-to-year changes in published results", "att8_sale_z")$pct)`%. But a school's results typically move only `r f2(ks$info$sd_change)` of a standard deviation from one year to the next. A typical year's change is therefore worth about `r f2(ks$info$sd_change * kr("Within school: year-to-year changes in published results", "att8_sale_z")$pct)`% of the price.
+  - **The change from the previous year as news:** `r sg2(kr("Within school: the change from the previous year", "news")$pct)`%.
+  - **The same property sold twice** across a change in published results (`r big(ks$info$props_repeat)` properties): `r sg2(kr("Same property: repeat sales", "att8_sale_z")$pct)`%, too imprecise to say more.
+- **Coverage gap:** sales from September 2018 to October 2022 need the archived 2016/17 to 2018/19 school tables. Those must be downloaded by hand from the DfE performance tables service.
+
+::: {.callout-tip collapse="true"}
+## The models
+For sale $i$ at date $t$, nearest secondary $s$, with $A_{s,y(t)}$ the latest published Attainment 8 at $t$ (standardised within results year):
+$$\log p_i = \beta A_{s,y(t)} + X_i'\gamma + \mu_t + \lambda_l + \varepsilon_i \qquad \text{(same LSOA)}$$
+$$\log p_i = \beta A_{s,y(t)} + X_i'\gamma + \eta_s + \mu_{d,t} + \lambda_l + \varepsilon_i \qquad \text{(within school)}$$
+```r
+feols(lp ~ att8_sale_z + <controls> | near_secondary_urn + lad26cd^ym + lsoa21cd, data = S, cluster = ~msoa21cd)   # R/17
+```
+:::
+
+## How this compares with Greaves and Venturin (2026)
+
+Greaves and Venturin (IZA DP 18750) is the closest study. It also covers English secondary schools and uses the same Price Paid–EPC linked dataset (Chi et al. 2025). The designs differ.
+
+| | Greaves and Venturin (2026) | This study |
+|---|---|---|
+| **Where** | 50 local authorities with catchment GIS files (mostly outside London; not representative of England) | All of England, plus Brighton and Hove's real catchments |
+| **Sales** | 2019 onwards; about 430,000 within the optimal bandwidth of 1,260 boundaries | September 2018 to September 2026; 5.2 million |
+| **"Better school"** | Catchment boundary pairs; % 9–5 in English and maths, Progress 8 and FSM (2017/18 to 2019/20 means) | Nearest school by walking time; Attainment 8 (four-year mean, and at the date of sale), Ofsted at the date of sale, value added v2.1, popularity, FSM |
+| **Design** | Boundary discontinuity, optimal bandwidth, boundary fixed effects | Raw, district and LSOA fixed effects; split-LSOA "better side"; real-catchment boundaries (Brighton and Hove); Ofsted event study; repeat sales |
+
+**Where we agree**
+
+- **Small average premium.** Theirs is about 2.5%. Ours is 2.7–5.2% for the same kind of home in the same district, and about 0.6–1% within the same LSOA.
+- **The premium grows with the quality gap.** They find about 6.5% where the gap is in the top quartile and little elsewhere. We find the better side's premium rises from +0.1% to +1.1% across gap quartiles.
+- **Value added has no independent pricing power.** Our value added is zero or negative in every design, for every pupil group.
+- **A bundle, not attainment alone.** They find a premium only when attainment and an affluent intake go together. We find the same: +0.9% when the higher-results school has fewer FSM pupils, nothing otherwise. With the FSM share in the model, the FSM share carries the premium.
+- **Barrier boundaries.** Removing lines along major roads, rivers and railways changes nothing for either study.
+
+**Where we differ, or go further**
+
+- **Our magnitudes are smaller,** about a quarter of theirs in the comparable split-LSOA design. A walking-time "nearest school" is a noisier measure of priority than a catchment line, which attenuates. LSOA fixed effects are also tighter than their bandwidth.
+- **"Escaping the bottom."** They find premiums at both ends of the distribution, and 7–8% even between two below-median schools when the gap is large. We find little where both schools are below the median (+0.3%, not significant). The clearest premium is in "reaching the top" (Q3 to Q4, +1.4%).
+- **Admission rules matter.** New here: the premium is largest where schools admit by distance or catchment, smaller for faith schools, and absent for grammar schools. There is none on the better side where the better school is a faith school.
+- **Brighton and Hove, which they cite as a reform case.** On its real catchments there is no jump at the boundary. With random allocation within catchments, the line is not where the price changes.
+- **Over time.** New here:
+  - Ofsted regradings move prices by tenths of a per cent.
+  - Year-to-year changes in published results are barely priced.
+  - Repeat sales of the same home give premiums under 1%.
+  - Their boundary design measures the long-run equilibrium. Ours shows that prices adjust slowly, and little, when school quality changes.
+- **Popularity** adds almost nothing once results are known. New here.
+- **Coverage.** Ours is national, including London, where catchments are rare and their design cannot reach.
+
+**Overall:** we corroborate their main message, a small premium concentrated where schools differ most and bundled with intake. On a different and national design we find it smaller still, and we find no "escaping the bottom" premium.
+
 ## The "20 to 25 per cent" figure
 
 - **The claim:** a Brighton and Hove councillor said (13 November 2026) that, nationally, house prices had gone up by 20 to 25% close to the most popular and successful schools.
@@ -675,10 +838,10 @@ feols(lp ~ up:post_ann + down:post_ann + <controls> | oa21cd + ym, data = RL, cl
 
 - Black, S. E. (1999) Do better schools matter? Parental valuation of elementary education. *Quarterly Journal of Economics*, 114(2), 577–599.
 - Black, S. E. and Machin, S. (2011) Housing valuations of school performance. In *Handbook of the Economics of Education*, vol. 3, 485–519.
-- Chi, B., Dennett, A., Oléron-Evans, T. and Morphet, R. A new attribute-linked residential property price dataset for England and Wales, 2011 to 2019. UCL CASA [year and working paper number to check]. (The address-matching method; run here through Chris Beech's DuckDB version, github.com/chris-beech-housing/Land-Registry-PPD-EPC-price-per-square-metre.)
+- Chi, B., Dennett, A., Oléron-Evans, T. and Morphet, R. (2025) House price per square metre in England and Wales, 1995–2024. UK Data Service ReShare. (The address-matching method; the same linked dataset Greaves and Venturin use; run here through Chris Beech's DuckDB version, github.com/chris-beech-housing/Land-Registry-PPD-EPC-price-per-square-metre.)
 - Gibbons, S. and Machin, S. (2006) Paying for primary schools: admission constraints, school popularity or congestion? *Economic Journal*, 116(510), C77–C92.
 - Gibbons, S., Machin, S. and Silva, O. (2013) Valuing school quality using boundary discontinuities. *Journal of Urban Economics*, 75, 15–28.
 - Greaves, E. and Venturin, A. (2026) Re-examining the property price premium around 'better' schools. IZA Discussion Paper 18750.
-- Hussain, I. (2023) Housing market and school choice response to school quality information shocks. *Journal of Urban Economics* [volume and pages to check]; as cited by Greaves and Venturin.
+- Hussain, I. (2023) The capitalization of school quality into property values: evidence from English schools. *Journal of Urban Economics*, 133, 103519.
 - Sun, L. and Abraham, S. (2021) Estimating dynamic treatment effects in event studies with heterogeneous treatment effects. *Journal of Econometrics*, 225(2), 175–199.
 - Tan, J. and Dennett, A. CUPUM book chapter on schools and house prices in Brighton and Hove [full title and year to check].

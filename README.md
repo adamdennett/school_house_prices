@@ -149,3 +149,16 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
     - from the options' publication (October 2024): moved down −4.0% (−7.2 to −0.6); moved up −2.6% (not significant);
     - the fall came in late 2024.
     - Both groups fell, so it is more likely a local trend. Suggestive at most.
+- **`R/16_premium_pounds.R`:** the "nearest secondary is Outstanding" premium by property type and year (type-year baselines), applied to that type's median price that year.
+  - **2025, semi-detached (median £273,000):** raw £92,500; same local authority £8,000; same LSOA about £0.
+  - **Terraced:** £105,000, £11,900, £1,300.
+  - **Detached:** £124,400, £6,800, −£6,000.
+  - The like-for-like premium has shrunk since 2018 for every type, as Outstanding grades have aged.
+- **`R/17_ks4_at_sale.R`:** the latest published Attainment 8 at the date of sale (standardised within results year), for sales from 20 October 2022. The 2016/17–2018/19 tables are still needed for earlier sales: the DfE performance tables service refuses scripted downloads, so they must be fetched by hand.
+  - **Same LSOA:** +0.50% per SD.
+  - **With the four-year mean:** the mean +0.38%, the latest year +0.22% (not significant).
+  - **Within school (year-to-year changes):** +0.22% per SD, about 0.06% for a typical year's change.
+  - **News term:** +0.04%.
+  - **Repeat sales:** +0.05% (not significant).
+  - **Buyers price standing, not the latest results.**
+- **Report:** `report/findings.qmd` now has "In pounds", "Results at the date of sale" and "How this compares with Greaves and Venturin (2026)".
