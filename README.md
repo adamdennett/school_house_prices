@@ -97,3 +97,16 @@ Per standard deviation, together: Attainment 8 +0.196 log points raw, +0.055 lik
   | Downgrade | −0.10% (−0.29 to 0.08) | −0.02% (−0.23 to 0.19) |
 
   Secondary upgrades climb slowly to about +0.3% at two to three years and +0.8% at three and a half years, as fewer cohorts are observed that long. Downgrades barely move prices. Some pre-trends: prices near later-downgraded secondaries were already drifting down three years before, and near later-upgraded primaries drifting up.
+- **`R/11_heterogeneity.R`:** the within-LSOA premium per standard deviation of the nearest secondary's Attainment 8 (school-level SD, value added held constant; overall +0.67%), by group:
+  - **Admissions basis of the nearest secondary:**
+    - mostly distance or catchment: +1.5% (1.1 to 1.9);
+    - faith: +0.95%;
+    - grammar: +0.15% (not significant).
+    - In the R/09 split-LSOA design, when the better school is a faith school the better side gets −0.0%; when it admits by distance, +0.86%; when it is a grammar, +0.84% (0.0 to 1.7).
+    - **Buyers pay where the address buys priority.**
+  - **Brighton and Hove** (random allocation within catchments since 2008): +0.3% (−2.8 to 3.5). That is too few sales to say anything.
+  - **Region:**
+    - highest: Yorkshire and The Humber +1.7%, Inner London +1.5%;
+    - lowest: South East +0.1%, East Midlands +0.3%.
+  - **Deprivation:** no clear gradient; the least deprived quintile is lowest at +0.3%.
+  - **Rural schools** +1.2%, urban +0.7%.
