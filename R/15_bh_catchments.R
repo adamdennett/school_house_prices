@@ -2,7 +2,8 @@
 # ---------------------------------------------------------------------------
 # Brighton and Hove gives catchment-area priority for secondary places and, since 2008, allocates
 # by random tie-break within a catchment rather than by distance. Its catchments are published
-# (Brighton & Hove City Council, OGL v3); copies are in ../bh_school_system/data:
+# (Brighton & Hove City Council, OGL v3); copies are in the sibling bh-school-system/data
+# (that folder is named bh_school_system on some machines):
 #   catchments_pre2024.geojson  the map in force for entry up to September 2025
 #   catchments_current.geojson  "Option Z", agreed by the council in early 2025, for entry from September 2026
 # Sales before 1 March 2025 are placed on the old map, later sales on the new one.
@@ -32,7 +33,12 @@
 # ---------------------------------------------------------------------------
 suppressPackageStartupMessages({ library(data.table); library(arrow); library(sf); library(fixest); library(ggplot2) })
 sf_use_s2(FALSE); setFixest_nthreads(8)
-bhs <- normalizePath(file.path(dirname(here::here()), "bh_school_system", "data"), winslash = "/")
+# The sibling repo is checked out as bh-school-system on some machines and
+# bh_school_system on others, so take whichever is actually there.
+bhs_root <- Filter(dir.exists, file.path(dirname(here::here()),
+                                         c("bh-school-system", "bh_school_system")))[1]
+if (is.na(bhs_root)) stop("Neither bh-school-system nor bh_school_system is a sibling of ", here::here())
+bhs <- normalizePath(file.path(bhs_root, "data"), winslash = "/")
 sva <- normalizePath(file.path(dirname(here::here()), "school_value_added"), winslash = "/")
 
 # ---- catchments and their schools ---------------------------------------------------------------
